@@ -10,6 +10,8 @@ Tips:
 Tweepy has by default the sleep mechanism to respect the api call quotas of Twitter.
 If you restart the program, you have the ability to resume where you left off in the database.
 Before running the class, the datetime column should be indexed in MongoDB for faster execution
+
+
 2 ############ enrich_mongo_with_yandex_api.py ############
 
 It calls Yandex api based on 3 criteria: A. Tweet may contain coordinates information. B. Tweet may contain location name (city, country..). C. Tweet contains only and only user location info(city, country, user generated info..)
