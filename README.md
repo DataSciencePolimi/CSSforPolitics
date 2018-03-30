@@ -1,7 +1,11 @@
-# TweetAnalyser
-This project contains separate python classes that performs data enrichment for the tweets. 
+Explanation of Python classes:
 
-1 ############ enrich_mongo_with_twitter_api.py ############
+1 ############ TweetPredictorForMuseums.py ############
+
+In this class, there exist codes for data preprocessing and machine learning to predict whether a Tweet is related or not about Italy museums
+
+
+2 ############ enrich_mongo_with_twitter_api.py ############
 
 This class uses Tweepy framework to make Twitter api calls. It enriches the records in MongoDb by using tweetId.
 
@@ -12,7 +16,7 @@ If you restart the program, you have the ability to resume where you left off in
 Before running the class, the datetime column should be indexed in MongoDB for faster execution
 
 
-2 ############ enrich_mongo_with_yandex_api.py ############
+3 ############ enrich_mongo_with_yandex_api.py ############
 
 It calls Yandex api based on 3 criteria: A. Tweet may contain coordinates information. B. Tweet may contain location name (city, country..). C. Tweet contains only and only user location info(city, country, user generated info..)
 
