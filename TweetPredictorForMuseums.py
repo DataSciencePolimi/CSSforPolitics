@@ -191,7 +191,8 @@ def train_word2vec_csv(dimensions):
             print("completed building Word2Vec vocabulary from scratch")
     print("completed building Word2Vec vocabulary from scratch")
 
-#OLD
+
+# OLD
 '''def ratio(is_tp_ratio, y_true, y_pred, pct):
     if y_pred.ndim == 2:
         y_pred = y_pred[:, 1]
@@ -212,6 +213,7 @@ def train_word2vec_csv(dimensions):
     else:
         res = "tn_ratio: " + str(ratio_val) + " , lowest probability score: " + str(round(prob_min, 2))
     return res '''
+
 
 def ratio(y_true, y_pred, pct):
     if y_pred.ndim == 2:
@@ -330,7 +332,7 @@ def evaluate_probability_based_train_test_model(clf_prob, X_train, y_train, X_te
     print("Natural TP rate=" + str(sum(y_test) / len(y_test)))
     y_pred_prob = clf_prob.predict_proba(X_test)[:, 1]
     print("test started")
-    #print('Top 100 first' + str(len(y_test)) + ' records in test dataset) -> ' + str(
+    # print('Top 100 first' + str(len(y_test)) + ' records in test dataset) -> ' + str(
     #    ratio(y_test, y_pred_prob, 1)))
 
     print("test ended")
@@ -808,7 +810,7 @@ def get_file(file_id):
         filename = "C:/Users/emre2/Desktop/Museums/latest_data/merged_with_sentiment.csv"
     elif file_id == 6:
         filename = "C:/Users/emre2/Desktop/Museums/latest_data/pompei_colosseo_scala_sample_fulltext_utf_header_rnd_363x2.csv"
-
+    print("selected input file: " + filename)
     return filename
 
 
@@ -830,18 +832,46 @@ def get_model(model_id, prob_enabled):
         print("model type: KNeighborsClassifier")
         clf = KNeighborsClassifier(n_neighbors=5)
     elif model_id == 6:
-        print("model type: n-grams with Tfidf")
-        clf = Pipeline([('vect', CountVectorizer(ngram_range=(1,1), analyzer='word')),
+        print("model type: unigram, bigram and trigrams with Tfidf")
+        clf = Pipeline([('vect', CountVectorizer(min_df=5, ngram_range=(2, 5), analyzer='char_wb')),
                         ('tfidf', TfidfTransformer()),
                         ('clf', svm.SVC(kernel='linear', probability=prob_enabled)),
                         ])
     elif model_id == 7:
-        print("model type: n-grams with Tfidf")
-        clf = Pipeline([('vect', CountVectorizer(ngram_range=(1,3), analyzer='word')),
+        print("model type: unigram with Tfidf")
+        clf = Pipeline([('vect', CountVectorizer(ngram_range=(1, 1), analyzer='word')),
                         ('tfidf', TfidfTransformer()),
                         ('clf', LogisticRegression()),
                         ])
     return clf
+
+
+def calculate_ngram_counts(text):
+    splits = text.split(', ')
+    counter_unigram = 0
+    counter_bigram = 0
+    counter_trigram = 0
+    counter_quadrigram = 0
+
+    for splitss in splits:
+        splitss = splitss.replace('{', '')
+        splitss = splitss.replace('\'', '')
+        # print(splitss)
+        fields = splitss.split(':')
+        sentence = fields[0]
+        # print(sentence)
+        words = sentence.split(' ')
+        # print(words)
+        count = len(words)
+        if count == 1:
+            counter_unigram += 1
+        elif count == 2:
+            counter_bigram += 1
+        elif count == 3:
+            counter_trigram += 1
+        elif count == 4:
+            counter_quadrigram += 1
+    return counter_unigram, counter_bigram, counter_trigram, counter_quadrigram
 
 
 def get_train_test_indexes(is_test, num_lines, percentage):
@@ -871,39 +901,31 @@ def main():
             test()
             exit(-1)
 
-        vocab_dimension = 25
-
-        train_vocab_enabled = False
-        if train_vocab_enabled:
-            train_word2vec_csv(vocab_dimension)
-            return
-
-        filename = get_file(4)
-
-        num_lines = sum(1 for line in open(filename, newline='', encoding='utf-8'))
-
+        ###PARAMETER INITIALIZATION STARTED####
+        # "model type:1 SVM Linear Kernel" type:2 SVM RBF Kernel" type:3 Random Forest" type:4 Logistic Regression"type:5 KNeighborsClassifier"  type:6 n-grams with Tfidf")
         model_id = 6
-        # "model type:1 SVM Linear Kernel"
-        # "model type:2 SVM RBF Kernel"
-        # "model type:3 Random Forest"
-        # "model type:4 Logistic Regression"
-        # "model type:5 KNeighborsClassifier"
-        # "model type:6 n-grams with Tfidf")
-        clf = get_model(model_id, False)
-
-        is_test = False
-
-        feature_type = 3
-        # "feature type 1: many features including mean of Word2Vec values, for other features scaling and one hot encoding enabled"
-        # "feature type 2: one single feature, mean vector value of Word2Vec"
-        # "feature type 3: n-gram with Tfidf "
-
+        vocab_dimension = 25
         test_percentage = 0.2
+        # "feature type 1: many features including mean of Word2Vec values, for other features scaling and one hot encoding enabled" type 2: one single feature, mean vector value of Word2Vec" type 3: n-gram with Tfidf "
+        feature_type = 3
+        ###PARAMETER INITIALIZATION COMPLETED####
 
+        ###FLAG INITIALIZATION STARTED###
         normal_run_enabled = True
         cross_val_enabled = True
         probabilistic_evaluation_enabled = False
         kfold_enabled = True
+        is_test = False
+        train_vocab_enabled = False
+        ###FLAG INITIALIZATION COMPLETED###
+
+        if train_vocab_enabled:
+            train_word2vec_csv(vocab_dimension)
+            return
+
+        clf = get_model(model_id, False)
+        filename = get_file(6)
+        num_lines = sum(1 for line in open(filename, newline='', encoding='utf-8'))
 
         if normal_run_enabled:
             print("\nSTARTED TRAIN-TEST SPLIT. PROBABILITY IS NOT ENABLED\n")
@@ -918,8 +940,11 @@ def main():
             if model_id == 6:
                 count_vectorizer = clf.steps[0][1]
                 vocabulary = count_vectorizer.vocabulary_
+                count_of_unigrams, count_of_bigrams, count_of_trigrams, count_of_quadrigrams = calculate_ngram_counts(
+                    str(vocabulary))
+                print("[unigrams, bigrams, trigrams, quadrigrams] : [" + str(count_of_unigrams) + "," + str(
+                    count_of_bigrams) + "," + str(count_of_trigrams) + "," + str(count_of_quadrigrams) + "]")
                 print("n-gram vocabulary size: " + str(len(vocabulary)))
-
             # print(clf.coef_)
             y_pred = clf.predict(X_test)
             evaluate_train_test(clf, y_test, y_pred)
@@ -948,7 +973,7 @@ def main():
         if cross_val_enabled:
             print("\nSTARTED CROSS VALIDATION. PROBABILITY IS NOT ENABLED\n")
 
-            X_all, y_all = get_cross_val_input(feature_type, vocab_dimension, filename, True)
+            X_all, y_all = get_cross_val_input(feature_type, vocab_dimension, filename, is_yes_1)
             clf.fit(X_all, y_all)
             evaluate_cross_validation(clf, X_all, y_all)
             print("\nCOMPLETED CROSS VALIDATION. PROBABILITY IS NOT ENABLED\n")
