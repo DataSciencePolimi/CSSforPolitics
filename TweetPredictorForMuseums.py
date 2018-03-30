@@ -833,7 +833,7 @@ def get_model(model_id, prob_enabled):
         clf = KNeighborsClassifier(n_neighbors=5)
     elif model_id == 6:
         print("model type: unigram, bigram and trigrams with Tfidf")
-        clf = Pipeline([('vect', CountVectorizer(min_df=5, ngram_range=(2, 5), analyzer='char_wb')),
+        clf = Pipeline([('vect', CountVectorizer(min_df=3, ngram_range=(1, 3), analyzer='word')),
                         ('tfidf', TfidfTransformer()),
                         ('clf', svm.SVC(kernel='linear', probability=prob_enabled)),
                         ])
@@ -852,7 +852,7 @@ def calculate_ngram_counts(text):
     counter_bigram = 0
     counter_trigram = 0
     counter_quadrigram = 0
-
+    counter_5gram = 0
     for splitss in splits:
         splitss = splitss.replace('{', '')
         splitss = splitss.replace('\'', '')
@@ -871,7 +871,9 @@ def calculate_ngram_counts(text):
             counter_trigram += 1
         elif count == 4:
             counter_quadrigram += 1
-    return counter_unigram, counter_bigram, counter_trigram, counter_quadrigram
+        elif count == 5:
+            counter_5gram += 1
+    return counter_unigram, counter_bigram, counter_trigram, counter_quadrigram, counter_5gram
 
 
 def get_train_test_indexes(is_test, num_lines, percentage):
@@ -913,7 +915,7 @@ def main():
         ###FLAG INITIALIZATION STARTED###
         normal_run_enabled = True
         cross_val_enabled = True
-        probabilistic_evaluation_enabled = False
+        probabilistic_evaluation_enabled = True
         kfold_enabled = True
         is_test = False
         train_vocab_enabled = False
@@ -928,7 +930,7 @@ def main():
         num_lines = sum(1 for line in open(filename, newline='', encoding='utf-8'))
 
         if normal_run_enabled:
-            print("\nSTARTED TRAIN-TEST SPLIT. PROBABILITY IS NOT ENABLED\n")
+            print("\nSTARTED TRAIN-TEST SPLIT\n")
 
             is_yes_1 = False
             print("Y=0, N=1")
@@ -940,18 +942,20 @@ def main():
             if model_id == 6:
                 count_vectorizer = clf.steps[0][1]
                 vocabulary = count_vectorizer.vocabulary_
-                count_of_unigrams, count_of_bigrams, count_of_trigrams, count_of_quadrigrams = calculate_ngram_counts(
+                print(str(vocabulary))
+                count_of_unigrams, count_of_bigrams, count_of_trigrams, count_of_quadrigrams, count_of_5grams = calculate_ngram_counts(
                     str(vocabulary))
                 print("[unigrams, bigrams, trigrams, quadrigrams] : [" + str(count_of_unigrams) + "," + str(
-                    count_of_bigrams) + "," + str(count_of_trigrams) + "," + str(count_of_quadrigrams) + "]")
+                    count_of_bigrams) + "," + str(count_of_trigrams) + "," + str(count_of_quadrigrams) + "," + str(count_of_5grams) + "]")
                 print("n-gram vocabulary size: " + str(len(vocabulary)))
             # print(clf.coef_)
             y_pred = clf.predict(X_test)
             evaluate_train_test(clf, y_test, y_pred)
-            print("\nCOMPLETED TRAIN-TEST SPLIT. PROBABILITY IS NOT ENABLED\n")
+            if not probabilistic_evaluation_enabled:
+                print("\nCOMPLETED TRAIN-TEST SPLIT. \n")
 
             if probabilistic_evaluation_enabled:
-                print("\nSTARTED TRAIN-TEST SPLIT. PROBABILITY IS ENABLED\n")
+                print("\nSTARTED PROBABILITY BASED EVALUATION\n")
 
                 clf_prob = get_model(model_id, True)
 
@@ -968,18 +972,19 @@ def main():
                                                                   filename, is_yes_1, test_percentage, is_test,
                                                                   num_lines)
                 evaluate_probability_based_train_test_model(clf_prob, X_train, y_train, X_test, y_test)
-                print("\n COMPLETED TRAIN-TEST SPLIT. PROBABILITY IS ENABLED\n")
+                print("\n COMPLETED PROBABILITY BASED EVALUATION. COMPLETED TRAIN-TEST\n")
 
         if cross_val_enabled:
-            print("\nSTARTED CROSS VALIDATION. PROBABILITY IS NOT ENABLED\n")
+            print("\nSTARTED CROSS VALIDATION.\n")
 
             X_all, y_all = get_cross_val_input(feature_type, vocab_dimension, filename, is_yes_1)
             clf.fit(X_all, y_all)
             evaluate_cross_validation(clf, X_all, y_all)
-            print("\nCOMPLETED CROSS VALIDATION. PROBABILITY IS NOT ENABLED\n")
+            if not probabilistic_evaluation_enabled:
+                print("\nCOMPLETED CROSS VALIDATION. \n")
 
             if probabilistic_evaluation_enabled:
-                print("\nSTARTED CROSS VALIDATION. PROBABILITY IS ENABLED\n")
+                print("\nSTARTED PROBABILITY BASED EVALUATION\n")
 
                 clf_prob = get_model(model_id, True)
 
@@ -993,10 +998,11 @@ def main():
                 X_all, y_all = get_cross_val_input(feature_type, vocab_dimension, filename, is_yes_1)
 
                 evaluate_probability_based_cross_val_model(clf_prob, X_all, y_all, is_yes_1)
-                print("\nCOMPLETED CROSS VALIDATION. PROBABILITY IS ENABLED\n")
+                print("\n COMPLETED PROBABILITY BASED EVALUATION. COMPLETED CROSS VALIDATION\n")
+
 
         if kfold_enabled:
-            print("\nSTARTED K-FOLD. PROBABILITY IS NOT ENABLED\n")
+            print("\nSTARTED K-FOLD. \n")
 
             is_yes_1 = False
 
@@ -1004,7 +1010,7 @@ def main():
             X_all, y_all = get_cross_val_input(feature_type, vocab_dimension, filename, is_yes_1)
             do_kfold(clf, X_all, y_all)
 
-            print("\nCOMPLETED K-FOLD. PROBABILITY IS NOT ENABLED\n")
+            print("\nCOMPLETED K-FOLD. \n")
     except Exception as exception:
         print('Oops!  An error occurred.  Try again...', exception)
 
