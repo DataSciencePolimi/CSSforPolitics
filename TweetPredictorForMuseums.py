@@ -34,6 +34,11 @@ from sklearn.svm import LinearSVC
 from time import time
 from sklearn.model_selection import KFold
 from sklearn.metrics import accuracy_score
+from sklearn.model_selection import StratifiedKFold
+from sklearn.metrics import roc_curve, auc
+from itertools import cycle
+from sklearn import svm, datasets
+from scipy import interp
 
 
 def remove_extra_chars_from_word(word):
@@ -48,7 +53,8 @@ def remove_extra_chars_from_word(word):
     word = word.replace('&', '')
     word = word.replace('√', '')
     word = word.replace('®', '')
-
+    word = word.replace(',', '')
+    word = word.replace('#', '')
     return word
 
 
@@ -72,9 +78,19 @@ def get_stop_words():
 stop_words_voc = get_stop_words()
 
 
+def is_less_than_character_count(word):
+    max_limit = 3
+    res = False
+    list_characters = list(word)
+    if len(list_characters) < max_limit:
+        res = True
+    return res
+
+
 def is_stopword(word):
     # this method is related with Word2Vec
     res = False
+    #print(str(stop_words_voc))
     if stop_words_voc is None:
         exit(-1)
     if word in stop_words_voc:
@@ -92,7 +108,9 @@ def get_trained_word2vec_model(dimension):
         if word2vec_model is not None:
             return word2vec_model
 
-        filename = "C:/Users/emre2/Desktop/Museums/latest_data/model_voc_02_03_vocab" + str(dimension)
+        #filename = "C:/_Documents/POLIMI/Museums/latest_data/model_voc_02_03_vocab" + str(dimension)
+        filename = "C:/_Documents/POLIMI/Museums/latest_data/model_voc_04_04_vocab_lowercase" + str(dimension)
+
         new_model = Word2Vec.load(filename)
         word2vec_model = new_model
 
@@ -102,9 +120,8 @@ def get_trained_word2vec_model(dimension):
     return word2vec_model
 
 
-def get_mean_vector_value_of_text(text, dimension):
+def get_mean_vector_value_of_text(text, dimension, model):
     # this method is related with Word2Vec
-    model = get_trained_word2vec_model(dimension)
 
     splitted = text.split(" ")
     current_word2vec = []
@@ -115,14 +132,17 @@ def get_mean_vector_value_of_text(text, dimension):
 
             if is_weblink(word):
                 continue
+            elif is_less_than_character_count(word):
+                continue
             elif is_stopword(word):
                 continue
             else:
+                word = word.lower()
                 if word in model.wv.vocab:
                     vec_word = model[word]
                     current_word2vec.append(vec_word)
-                else:
-                    print("not existing in model: " + word)
+                #else:
+                    #print("not existing in model: " + word)
 
         if len(current_word2vec) == 0:
             zeros = [0] * dimension
@@ -136,11 +156,24 @@ def get_mean_vector_value_of_text(text, dimension):
     return averaged_word2vec
 
 
+def contains_alphabetic_characters(word):
+    res = False
+    word = word.lower()
+    ascii_lowercase = "abcdefghijklmnopqrstuvwxyz"
+    list_alphabet = list(ascii_lowercase)
+    list_characters_of_word = list(word)
+    for character in list_characters_of_word:
+        if character in list_alphabet:
+            res = True
+            break
+    return res
+
+
 def train_word2vec_csv(dimensions):
-    # with open('C:/Users/emre2/Desktop/Museums/step-1.csv', newline='', encoding='utf-8') as f:
+    # with open('C:/_Documents/POLIMI/Museums/step-1.csv', newline='', encoding='utf-8') as f:
     print("started building Word2Vec vocabulary from scratch")
 
-    with open('C:/Users/emre2/Desktop/Museums/latest_data/vocab_build_all_after_fulltext_0203.csv', newline='',
+    with open('C:/_Documents/POLIMI/Museums/latest_data/vocab_build_all_after_fulltext_0203.csv', newline='',
               encoding='utf-8') as f:
         try:
             reader = csv.reader(f)
@@ -162,9 +195,16 @@ def train_word2vec_csv(dimensions):
 
                     for word in tweet_content_words:
                         word = remove_extra_chars_from_word(word)
-                        if is_weblink(word):
+                        word = word.lower()
+                        if word == "@" or word == "" or word == " " or word == "  ":
+                            continue
+                        elif not contains_alphabetic_characters(word):
+                            continue
+                        elif is_weblink(word):
                             continue
                         elif is_stopword(word):
+                            continue
+                        elif is_less_than_character_count(word):
                             continue
                         else:
                             whole_words.append(word)
@@ -177,13 +217,14 @@ def train_word2vec_csv(dimensions):
 
                 except Exception as exception:
                     print('Oops!  An error occurred.  Try again...', exception)
+            print(str(whole_tweet_contents))
 
             print("all words count" + str(len(whole_words)))
             print("unique all words count" + str(len(unique_words)))
 
             model = Word2Vec(whole_tweet_contents, size=dimensions, window=5, min_count=1, workers=4)
 
-            filename = "C:/Users/emre2/Desktop/Museums/latest_data/model_voc_02_03_vocab" + str(dimensions)
+            filename = "C:/_Documents/POLIMI/Museums/latest_data/model_voc_04_04_vocab_lowercase" + str(dimensions)
             model.save(filename)
 
         except Exception as exception:
@@ -253,6 +294,21 @@ def generate_feature_ngram(filename, test_percentage, is_shuffle, is_yes_1):
     return X_train, X_test, y_train, y_test
 
 
+def plot_word2Vec(model):
+    vocab = list(model.wv.vocab)
+    X_vocab = model[vocab]
+    tsne = TSNE(n_components=2)
+    X_tsne = tsne.fit_transform(X_vocab)
+    df = pd.DataFrame(X_tsne, index=vocab, columns=['x', 'y'])
+    fig = plt.figure()
+    ax = fig.add_subplot(1, 1, 1)
+
+    ax.scatter(df['x'], df['y'])
+    for word, pos in df.iterrows():
+        ax.annotate(word, pos)
+    plt.show()
+
+
 def generate_feature_word2vec(begin_index, end_index, dimension, filename, isYes1):
     # This is based on single feature, which contains the average Vector value for each tweet.
     try:
@@ -261,12 +317,17 @@ def generate_feature_word2vec(begin_index, end_index, dimension, filename, isYes
         data_df = data_df[begin_index:end_index]
         textvalues = np.array(data_df["text"])
         vect_means = []
+        model = get_trained_word2vec_model(dimension)
+        #plot_word2Vec(model)
 
-        for textvalue in textvalues:
-            vect_mean = get_mean_vector_value_of_text(textvalue, dimension)
-            vect_means.append(vect_mean)
+        X = convert_text_to_word2vec(textvalues, dimension, model)
 
-        X = vect_means
+
+        #for textvalue in textvalues:
+        #    vect_mean = get_mean_vector_value_of_text(textvalue, dimension, model)
+        #    vect_means.append(vect_mean)
+
+        #X = vect_means
         if isYes1:
             y = (np.array(data_df["check"]
                           .replace("N", 0)
@@ -343,8 +404,12 @@ def evaluate_probability_based_train_test_model(clf_prob, X_train, y_train, X_te
             int(i * len(y_test))) + ' records in test dataset) -> ' + str(
             ratio(y_test, y_pred_prob, pct=i)))
 
+    is_roc_plot_enabled = False
+    if is_roc_plot_enabled:
+        plot_roc(y_test, y_pred_prob)
 
-def evaluate_probability_based_cross_val_model(clf_prob, X_all, y_all, is_tp_ratio):
+
+def evaluate_probability_based_cross_val_model(clf_prob, X_all, y_all):
     clf_prob.fit(X_all, y_all)
     print("Natural TP rate=" + str(sum(y_all) / len(y_all)))
     y_pred_prob = cross_val_predict(clf_prob, X_all, y_all, cv=10, method='predict_proba')[:, 1]
@@ -356,10 +421,66 @@ def evaluate_probability_based_cross_val_model(clf_prob, X_all, y_all, is_tp_rat
             ratio(y_all, y_pred_prob, pct=i)))
 
 
-def convert_text_to_word2vec(data, dimension):
+def evaluate_probability_based_stratified_cross_val_model(classifier, X, y):
+    cv = StratifiedKFold(n_splits=6)
+    tprs = []
+    aucs = []
+    mean_fpr = np.linspace(0, 1, 100)
+
+    i = 0
+    try:
+        for train, test in cv.split(X, y):
+            X = np.array(X)
+            X_train = X[train]
+            y_train = y[train]
+            X_test = X[test]
+            classifier.fit(X_train, y_train)
+            probas_ = classifier.predict_proba(X_test)
+
+            #probas_ = classifier.fit(X[train], y[train]).predict_proba(X[test])
+            # Compute ROC curve and area the curve
+            fpr, tpr, thresholds = roc_curve(y[test], probas_[:, 1])
+            tprs.append(interp(mean_fpr, fpr, tpr))
+            tprs[-1][0] = 0.0
+            roc_auc = auc(fpr, tpr)
+            aucs.append(roc_auc)
+            plt.plot(fpr, tpr, lw=1, alpha=0.3,
+                     label='ROC fold %d (AUC = %0.2f)' % (i, roc_auc))
+
+            i += 1
+
+        plt.plot([0, 1], [0, 1], linestyle='--', lw=2, color='r',
+                 label='Luck', alpha=.8)
+
+        mean_tpr = np.mean(tprs, axis=0)
+        mean_tpr[-1] = 1.0
+        mean_auc = auc(mean_fpr, mean_tpr)
+        std_auc = np.std(aucs)
+        plt.plot(mean_fpr, mean_tpr, color='b',
+                 label=r'Mean ROC (AUC = %0.2f $\pm$ %0.2f)' % (mean_auc, std_auc),
+                 lw=2, alpha=.8)
+
+        std_tpr = np.std(tprs, axis=0)
+        tprs_upper = np.minimum(mean_tpr + std_tpr, 1)
+        tprs_lower = np.maximum(mean_tpr - std_tpr, 0)
+        plt.fill_between(mean_fpr, tprs_lower, tprs_upper, color='grey', alpha=.2,
+                         label=r'$\pm$ 1 std. dev.')
+
+        plt.xlim([-0.05, 1.05])
+        plt.ylim([-0.05, 1.05])
+        plt.xlabel('False Positive Rate')
+        plt.ylabel('True Positive Rate')
+        plt.title('Receiver operating characteristic Approach 2')
+        plt.legend(loc="lower right")
+        plt.show()
+    except Exception as e:
+        print(e)
+
+
+def convert_text_to_word2vec(data, dimension, model):
     vect_means = []
     for textvalue in data:
-        vect_mean = get_mean_vector_value_of_text(textvalue, dimension)
+        vect_mean = get_mean_vector_value_of_text(textvalue, dimension, model)
         vect_means.append(vect_mean)
 
     np_vect_means = np.asarray(vect_means)
@@ -380,8 +501,10 @@ def generate_features_scaled_encoded_including_word2vec(begin_index_train, end_i
         print("distribution of test output classes: " + str(
             data_df_test["check"].value_counts() / data_df_test["check"].count()))
 
-        npvectmeans_train = convert_text_to_word2vec(np.array(data_df_train["text"]), dimension)
-        npvectmeans_test = convert_text_to_word2vec(np.array(data_df_test["text"]), dimension)
+        model = get_trained_word2vec_model(dimension)
+
+        npvectmeans_train = convert_text_to_word2vec(np.array(data_df_train["text"]), dimension, model)
+        npvectmeans_test = convert_text_to_word2vec(np.array(data_df_test["text"]), dimension, model)
 
         # Define which columns should be encoded vs scaled
         columns_to_scale = ['tw_retweet_count', 'tw_favorite_count', 'user_friends_count', 'user_followers_count',
@@ -512,9 +635,10 @@ def generate_features_all_including_word2vec(begin_index, end_index, dimension, 
         #   .index.values].hist(figsize=[11, 11])
 
         vect_means = []
+        model = get_trained_word2vec_model(dimension)
 
         for textvalue in textvalues:
-            vect_mean = get_mean_vector_value_of_text(textvalue, dimension)
+            vect_mean = get_mean_vector_value_of_text(textvalue, dimension, model)
             vect_means.append(vect_mean)
 
         npvectmeans = np.asarray(vect_means)
@@ -575,7 +699,51 @@ def get_yes_no_count(set):
 
 def get_cross_val_input(feature_type, vocab_dimension, filename, is_yes_1):
     if feature_type == 1:
-        print("feature type 1: one single feature, mean vector value of Word2Vec")
+
+        try:
+            data_df = pd.read_csv(filename)
+
+            num_lines = sum(1 for line in open(filename, newline='', encoding='utf-8'))
+
+            model = get_trained_word2vec_model(vocab_dimension)
+
+            npvectmeans = convert_text_to_word2vec(np.array(data_df["text"]), vocab_dimension, model)
+
+            # Define which columns should be encoded vs scaled
+            columns_to_scale = ['tw_retweet_count', 'tw_favorite_count', 'user_friends_count', 'user_followers_count',
+                                'user_listed_count', 'user_favourites_count', 'user_statuses_count']
+            columns_categorical = ['tw_source', 'tw_lang', 'user_screen_name', 'user_verified', 'user_geo_enabled',
+                                   'user_default_profile']
+
+            # currently sentiment is not included in feature list
+            # X_train['sentiment'] = X_train['sentiment'].fillna('missing')
+            # X_test['sentiment'] = X_test['sentiment'].fillna('missing')
+
+            # Instantiate encoder/scaler
+            onehot_encoder = OneHotEncoder(sparse=False)
+            min_max = MinMaxScaler()
+            label_encoder = LabelEncoder()
+            onehot_encoded_list= np.zeros((len(data_df),1))
+            for col in columns_categorical:
+                integer_encoded = label_encoder.fit_transform(data_df[col])
+                reshaped = integer_encoded.reshape(len(integer_encoded), 1)
+                onehot_encoded = onehot_encoder.fit_transform(reshaped)
+                onehot_encoded_list=np.concatenate((onehot_encoded_list,onehot_encoded), axis=1)
+
+            scaled_columns = min_max.fit_transform(data_df[columns_to_scale])
+            X_all = np.concatenate((npvectmeans, scaled_columns, onehot_encoded_list), axis=1)
+
+            if is_yes_1:
+                y_all = (np.array(data_df["check"].replace("Y", 1).replace("N", 0)))
+            else:
+                y_all = (np.array(data_df["check"].replace("Y", 0).replace("N", 1)))
+            
+        except Exception as exception:
+            print('Oops!  An error occurred.  Try again...', exception)
+
+
+    elif feature_type == 2:
+        print("feature type 2: one single feature, mean vector value of Word2Vec")
         num_lines = sum(1 for line in open(filename, newline='', encoding='utf-8'))
         X_all, y_all = generate_feature_word2vec(0, num_lines, vocab_dimension,
                                                  filename, is_yes_1)
@@ -623,6 +791,7 @@ def get_train_test(feature_type, vocab_dimension, filename, is_yes_1, test_perce
         is_shuffle = False
         X_train, X_test, y_train, y_test = generate_feature_ngram(filename, test_percentage, is_shuffle, is_yes_1)
 
+
     else:
         return
     return X_train, y_train, X_test, y_test
@@ -635,6 +804,7 @@ def do_kfold(clf, X, y):
     final_score = 0
     for train_ind, test_ind in kf.split(X):
         i += 1
+        X = np.array(X)
         xtrain, ytrain = X[train_ind], y[train_ind]
         xtest, ytest = X[test_ind], y[test_ind]
         clf.fit(xtrain, ytrain)
@@ -797,19 +967,19 @@ def old_code_do_tfidf(filename):
 
 def get_file(file_id):
     if file_id == 0:
-        filename = "C:/Users/emre2/Desktop/Museums/latest_data/test.csv"
+        filename = "C:/_Documents/POLIMI/Museums/latest_data/test.csv"
     elif file_id == 1:
-        filename = "C:/Users/emre2/Desktop/Museums/latest_data/scala_sample_fulltext_utf_header.csv"
+        filename = "C:/_Documents/POLIMI/Museums/latest_data/scala_sample_fulltext_utf_header.csv"
     elif file_id == 2:
-        filename = "C:/Users/emre2/Desktop/Museums/latest_data/pompei_sample_fulltext_utf_header.csv"
+        filename = "C:/_Documents/POLIMI/Museums/latest_data/pompei_sample_fulltext_utf_header.csv"
     elif file_id == 3:
-        filename = "C:/Users/emre2/Desktop/Museums/latest_data/colosseo_sample_fulltext_utf_header.csv"
+        filename = "C:/_Documents/POLIMI/Museums/latest_data/colosseo_sample_fulltext_utf_header.csv"
     elif file_id == 4:
-        filename = "C:/Users/emre2/Desktop/Museums/latest_data/pompei_colosseo_scala_sample_fulltext_utf_header_rnd.csv"
+        filename = "C:/_Documents/POLIMI/Museums/latest_data/pompei_colosseo_scala_sample_fulltext_utf_header_rnd.csv"
     elif file_id == 5:
-        filename = "C:/Users/emre2/Desktop/Museums/latest_data/merged_with_sentiment.csv"
+        filename = "C:/_Documents/POLIMI/Museums/latest_data/merged_with_sentiment.csv"
     elif file_id == 6:
-        filename = "C:/Users/emre2/Desktop/Museums/latest_data/pompei_colosseo_scala_sample_fulltext_utf_header_rnd_363x2.csv"
+        filename = "C:/_Documents/POLIMI/Museums/latest_data/pompei_colosseo_scala_sample_fulltext_utf_header_rnd_363x2.csv"
     print("selected input file: " + filename)
     return filename
 
@@ -884,7 +1054,7 @@ def get_train_test_indexes(is_test, num_lines, percentage):
         test_end_index = 26
     else:
         train_start_index = 0
-        train_end_index = int(num_lines * percentage)
+        train_end_index = int(num_lines * (1-percentage))
         test_start_index = train_end_index
         test_end_index = num_lines
 
@@ -896,12 +1066,46 @@ def test():
     print(v.fit(["an apple a day keeps the doctor away"]).vocabulary_)
 
 
+def plot_roc(y_test, preds):
+    fpr, tpr, threshold = metrics.roc_curve(y_test, preds)
+    roc_auc = metrics.auc(fpr, tpr)
+
+    plt.title('Receiver Operating Characteristic')
+    plt.plot(fpr, tpr, 'b', label='AUC = %0.2f' % roc_auc)
+    plt.legend(loc='lower right')
+    plt.plot([0, 1], [0, 1], 'r--')
+    plt.xlim([0, 1])
+    plt.ylim([0, 1])
+    plt.ylabel('True Positive Rate')
+    plt.xlabel('False Positive Rate')
+    plt.show()
+
+
+def print_ngram_statistics(clf):
+    count_vectorizer = clf.steps[0][1]
+    vocabulary = count_vectorizer.vocabulary_
+    print(str(vocabulary))
+    count_of_unigrams, count_of_bigrams, count_of_trigrams, count_of_quadrigrams, count_of_5grams = calculate_ngram_counts(
+        str(vocabulary))
+    print("[unigrams, bigrams, trigrams, quadrigrams] : [" + str(count_of_unigrams) + "," + str(
+        count_of_bigrams) + "," + str(count_of_trigrams) + "," + str(count_of_quadrigrams) + "," + str(
+        count_of_5grams) + "]")
+    print("n-gram vocabulary size: " + str(len(vocabulary)))
+
+
 def main():
     try:
-        test_enabled = False
+        test_enabled = True
         if test_enabled:
-            test()
-            exit(-1)
+            mymodel = get_trained_word2vec_model(25)
+            print("colosseo: " + str(mymodel.most_similar(positive=['colosseo'], topn=3)))
+            print("scala: " + str(mymodel.most_similar(positive=['scala'], topn=3)))
+            print("pompei: " + str(mymodel.most_similar(positive=['pompei'], topn=3)))
+            print("roma: " + str(mymodel.most_similar(positive=['roma'], topn=3)))
+            print("italia: " + str(mymodel.most_similar(positive=['italia'], topn=3)))
+            print("italy: " + str(mymodel.most_similar(positive=['italy'], topn=3)))
+            #test()
+            #exit(-1)
 
         ###PARAMETER INITIALIZATION STARTED####
         # "model type:1 SVM Linear Kernel" type:2 SVM RBF Kernel" type:3 Random Forest" type:4 Logistic Regression"type:5 KNeighborsClassifier"  type:6 n-grams with Tfidf")
@@ -929,6 +1133,11 @@ def main():
         filename = get_file(6)
         num_lines = sum(1 for line in open(filename, newline='', encoding='utf-8'))
 
+        plot_wor2Vec_graph = False
+        if plot_wor2Vec_graph:
+            model = get_trained_word2vec_model(vocab_dimension)
+            plot_word2Vec(model)
+
         if normal_run_enabled:
             print("\nSTARTED TRAIN-TEST SPLIT\n")
 
@@ -940,15 +1149,10 @@ def main():
 
             clf.fit(X_train, y_train)
             if model_id == 6:
-                count_vectorizer = clf.steps[0][1]
-                vocabulary = count_vectorizer.vocabulary_
-                print(str(vocabulary))
-                count_of_unigrams, count_of_bigrams, count_of_trigrams, count_of_quadrigrams, count_of_5grams = calculate_ngram_counts(
-                    str(vocabulary))
-                print("[unigrams, bigrams, trigrams, quadrigrams] : [" + str(count_of_unigrams) + "," + str(
-                    count_of_bigrams) + "," + str(count_of_trigrams) + "," + str(count_of_quadrigrams) + "," + str(count_of_5grams) + "]")
-                print("n-gram vocabulary size: " + str(len(vocabulary)))
+                print_ngram_statistics(clf)
+
             # print(clf.coef_)
+
             y_pred = clf.predict(X_test)
             evaluate_train_test(clf, y_test, y_pred)
             if not probabilistic_evaluation_enabled:
@@ -997,7 +1201,10 @@ def main():
                 print("Y=0, N=1")
                 X_all, y_all = get_cross_val_input(feature_type, vocab_dimension, filename, is_yes_1)
 
-                evaluate_probability_based_cross_val_model(clf_prob, X_all, y_all, is_yes_1)
+
+                evaluate_probability_based_cross_val_model(clf_prob, X_all, y_all)
+                evaluate_probability_based_stratified_cross_val_model(clf_prob, X_all, y_all)
+
                 print("\n COMPLETED PROBABILITY BASED EVALUATION. COMPLETED CROSS VALIDATION\n")
 
 
