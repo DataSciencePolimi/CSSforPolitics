@@ -39,6 +39,8 @@ from sklearn.metrics import roc_curve, auc
 from itertools import cycle
 from sklearn import svm, datasets
 from scipy import interp
+from sklearn import cross_validation
+from sklearn.decomposition import PCA, RandomizedPCA
 
 
 def remove_extra_chars_from_word(word):
@@ -90,7 +92,7 @@ def is_less_than_character_count(word):
 def is_stopword(word):
     # this method is related with Word2Vec
     res = False
-    #print(str(stop_words_voc))
+    # print(str(stop_words_voc))
     if stop_words_voc is None:
         exit(-1)
     if word in stop_words_voc:
@@ -108,7 +110,7 @@ def get_trained_word2vec_model(dimension):
         if word2vec_model is not None:
             return word2vec_model
 
-        #filename = "C:/_Documents/POLIMI/Museums/latest_data/model_voc_02_03_vocab" + str(dimension)
+        # filename = "C:/_Documents/POLIMI/Museums/latest_data/model_voc_02_03_vocab" + str(dimension)
         filename = "C:/_Documents/POLIMI/Museums/latest_data/model_voc_04_04_vocab_lowercase" + str(dimension)
 
         new_model = Word2Vec.load(filename)
@@ -141,8 +143,8 @@ def get_mean_vector_value_of_text(text, dimension, model):
                 if word in model.wv.vocab:
                     vec_word = model[word]
                     current_word2vec.append(vec_word)
-                #else:
-                    #print("not existing in model: " + word)
+                # else:
+                # print("not existing in model: " + word)
 
         if len(current_word2vec) == 0:
             zeros = [0] * dimension
@@ -318,16 +320,15 @@ def generate_feature_word2vec(begin_index, end_index, dimension, filename, isYes
         textvalues = np.array(data_df["text"])
         vect_means = []
         model = get_trained_word2vec_model(dimension)
-        #plot_word2Vec(model)
+        # plot_word2Vec(model)
 
         X = convert_text_to_word2vec(textvalues, dimension, model)
 
-
-        #for textvalue in textvalues:
+        # for textvalue in textvalues:
         #    vect_mean = get_mean_vector_value_of_text(textvalue, dimension, model)
         #    vect_means.append(vect_mean)
 
-        #X = vect_means
+        # X = vect_means
         if isYes1:
             y = (np.array(data_df["check"]
                           .replace("N", 0)
@@ -343,9 +344,9 @@ def generate_feature_word2vec(begin_index, end_index, dimension, filename, isYes
 
 
 def evaluate_cross_validation(clf, x_all, y_all):
-    print("cross val score: " + str(cross_val_score(clf, x_all, y_all, cv=10).mean()))
-    # scoring = ['precision_macro', 'recall_macro']
-
+    cross_val_scores = cross_val_score(clf, x_all, y_all, cv=10)
+    print(str(cross_val_scores))
+    print("cross val score without pca: " + str(cross_val_scores.mean()))
     y_pred = cross_val_predict(clf, x_all, y_all, cv=10)
     tn, fp, fn, tp = confusion_matrix(y_all, y_pred).ravel()
     print("tn:" + str(tn) + " fn:" + str(fn) + " tp:" + str(tp) + " fp:" + str(fp))
@@ -421,7 +422,7 @@ def evaluate_probability_based_cross_val_model(clf_prob, X_all, y_all):
             ratio(y_all, y_pred_prob, pct=i)))
 
 
-def evaluate_probability_based_stratified_cross_val_model(classifier, X, y):
+def evaluate_probability_based_stratified_kfold_model(classifier, X, y):
     cv = StratifiedKFold(n_splits=6)
     tprs = []
     aucs = []
@@ -437,7 +438,7 @@ def evaluate_probability_based_stratified_cross_val_model(classifier, X, y):
             classifier.fit(X_train, y_train)
             probas_ = classifier.predict_proba(X_test)
 
-            #probas_ = classifier.fit(X[train], y[train]).predict_proba(X[test])
+            # probas_ = classifier.fit(X[train], y[train]).predict_proba(X[test])
             # Compute ROC curve and area the curve
             fpr, tpr, thresholds = roc_curve(y[test], probas_[:, 1])
             tprs.append(interp(mean_fpr, fpr, tpr))
@@ -470,7 +471,65 @@ def evaluate_probability_based_stratified_cross_val_model(classifier, X, y):
         plt.ylim([-0.05, 1.05])
         plt.xlabel('False Positive Rate')
         plt.ylabel('True Positive Rate')
-        plt.title('Receiver operating characteristic Approach 2')
+        plt.title('Receiver operating characteristic Approach 3 - 10fold without PCA')
+        plt.legend(loc="lower right")
+        plt.show()
+    except Exception as e:
+        print(e)
+
+
+def evaluate_probability_based_stratified_pca_kfold_model(classifier, X, y):
+    cv = StratifiedKFold(n_splits=10)
+    tprs = []
+    aucs = []
+    mean_fpr = np.linspace(0, 1, 100)
+
+    i = 0
+    try:
+        for train, test in cv.split(X, y):
+            X = np.array(X)
+            X_train = X[train]
+            y_train = y[train]
+            X_test = X[test]
+            X_t_train, X_t_test = get_pca_transformed_data(X_train, X_test)
+
+            classifier.fit(X_t_train, y_train)
+            probas_ = classifier.predict_proba(X_t_test)
+
+            # probas_ = classifier.fit(X[train], y[train]).predict_proba(X[test])
+            # Compute ROC curve and area the curve
+            fpr, tpr, thresholds = roc_curve(y[test], probas_[:, 1])
+            tprs.append(interp(mean_fpr, fpr, tpr))
+            tprs[-1][0] = 0.0
+            roc_auc = auc(fpr, tpr)
+            aucs.append(roc_auc)
+            plt.plot(fpr, tpr, lw=1, alpha=0.3,
+                     label='ROC fold %d (AUC = %0.2f)' % (i, roc_auc))
+
+            i += 1
+
+        plt.plot([0, 1], [0, 1], linestyle='--', lw=2, color='r',
+                 label='Luck', alpha=.8)
+
+        mean_tpr = np.mean(tprs, axis=0)
+        mean_tpr[-1] = 1.0
+        mean_auc = auc(mean_fpr, mean_tpr)
+        std_auc = np.std(aucs)
+        plt.plot(mean_fpr, mean_tpr, color='b',
+                 label=r'Mean ROC (AUC = %0.2f $\pm$ %0.2f)' % (mean_auc, std_auc),
+                 lw=2, alpha=.8)
+
+        std_tpr = np.std(tprs, axis=0)
+        tprs_upper = np.minimum(mean_tpr + std_tpr, 1)
+        tprs_lower = np.maximum(mean_tpr - std_tpr, 0)
+        plt.fill_between(mean_fpr, tprs_lower, tprs_upper, color='grey', alpha=.2,
+                         label=r'$\pm$ 1 std. dev.')
+
+        plt.xlim([-0.05, 1.05])
+        plt.ylim([-0.05, 1.05])
+        plt.xlabel('False Positive Rate')
+        plt.ylabel('True Positive Rate')
+        plt.title('Receiver operating characteristic Approach 4 - 10fold with PCA')
         plt.legend(loc="lower right")
         plt.show()
     except Exception as e:
@@ -509,7 +568,7 @@ def generate_features_scaled_encoded_including_word2vec(begin_index_train, end_i
         # Define which columns should be encoded vs scaled
         columns_to_scale = ['tw_retweet_count', 'tw_favorite_count', 'user_friends_count', 'user_followers_count',
                             'user_listed_count', 'user_favourites_count', 'user_statuses_count']
-        columns_categorical = ['tw_source', 'tw_lang', 'user_screen_name', 'user_verified', 'user_geo_enabled',
+        columns_categorical = ['tw_source', 'tw_lang', 'user_verified', 'user_geo_enabled',
                                'user_default_profile']
         X_train = data_df[begin_index_train:end_index_train]
         X_test = data_df[begin_index_test:end_index_test]
@@ -712,7 +771,7 @@ def get_cross_val_input(feature_type, vocab_dimension, filename, is_yes_1):
             # Define which columns should be encoded vs scaled
             columns_to_scale = ['tw_retweet_count', 'tw_favorite_count', 'user_friends_count', 'user_followers_count',
                                 'user_listed_count', 'user_favourites_count', 'user_statuses_count']
-            columns_categorical = ['tw_source', 'tw_lang', 'user_screen_name', 'user_verified', 'user_geo_enabled',
+            columns_categorical = ['tw_source', 'tw_lang', 'user_verified', 'user_geo_enabled',
                                    'user_default_profile']
 
             # currently sentiment is not included in feature list
@@ -723,12 +782,12 @@ def get_cross_val_input(feature_type, vocab_dimension, filename, is_yes_1):
             onehot_encoder = OneHotEncoder(sparse=False)
             min_max = MinMaxScaler()
             label_encoder = LabelEncoder()
-            onehot_encoded_list= np.zeros((len(data_df),1))
+            onehot_encoded_list = np.zeros((len(data_df), 1))
             for col in columns_categorical:
                 integer_encoded = label_encoder.fit_transform(data_df[col])
                 reshaped = integer_encoded.reshape(len(integer_encoded), 1)
                 onehot_encoded = onehot_encoder.fit_transform(reshaped)
-                onehot_encoded_list=np.concatenate((onehot_encoded_list,onehot_encoded), axis=1)
+                onehot_encoded_list = np.concatenate((onehot_encoded_list, onehot_encoded), axis=1)
 
             scaled_columns = min_max.fit_transform(data_df[columns_to_scale])
             X_all = np.concatenate((npvectmeans, scaled_columns, onehot_encoded_list), axis=1)
@@ -737,7 +796,7 @@ def get_cross_val_input(feature_type, vocab_dimension, filename, is_yes_1):
                 y_all = (np.array(data_df["check"].replace("Y", 1).replace("N", 0)))
             else:
                 y_all = (np.array(data_df["check"].replace("Y", 0).replace("N", 1)))
-            
+
         except Exception as exception:
             print('Oops!  An error occurred.  Try again...', exception)
 
@@ -797,11 +856,147 @@ def get_train_test(feature_type, vocab_dimension, filename, is_yes_1, test_perce
     return X_train, y_train, X_test, y_test
 
 
+def do_pca_kfold_2(X, y, desired_vec_dim):
+    clf_pca = get_model(1, False)
+    is_found = False
+    print("started pca kfold for " + str(desired_vec_dim))
+    kf = KFold(n_splits=10, shuffle=False, random_state=None)
+    i = 0
+    final_score = 0
+    tnn = 0
+    fnn = 0
+    tpp = 0
+    fpp = 0
+    for train_ind, test_ind in kf.split(X):
+        i += 1
+        X = np.array(X)
+        X_train, y_train = X[train_ind], y[train_ind]
+        X_test, y_test = X[test_ind], y[test_ind]
+        pca = RandomizedPCA(n_components=desired_vec_dim, whiten=True, random_state=False)  # adjust yourself
+        pca.fit(X_train)
+        X_t_train = pca.transform(X_train)
+        X_t_test = pca.transform(X_test)
+
+        clf_pca.fit(X_t_train, y_train)
+
+        y_pred = clf_pca.predict(X_t_test)
+        score = np.mean(y_pred == y_test)
+        final_score += score
+        print(str(i) + ": accuracy:" + str(score))
+        tn, fp, fn, tp = confusion_matrix(y_test, y_pred).ravel()
+        print("tn:" + str(tn) + " fn:" + str(fn) + " tp:" + str(tp) + " fp:" + str(fp))
+        tnn += tn
+        tpp += tp
+        fnn += fn
+        fpp += fp
+
+    print("average score: " + str(final_score / 10))
+    print("total confusion matrix: tn:" + str(tnn) + " fn:" + str(fnn) + " tp:" + str(
+        tpp) + " fp:" + str(fpp))
+    print("completed pca kfold for " + str(desired_vec_dim) + "\n\n")
+
+
+def do_pca_kfold(X, y, desired_vec_dim):
+    clf_pca = get_model(1, False)
+    is_found = False
+    print("started pca kfold for " + str(desired_vec_dim))
+    kf = KFold(n_splits=10, shuffle=False, random_state=None)
+    i = 0
+    final_score = 0
+    tnn = 0
+    fnn = 0
+    tpp = 0
+    fpp = 0
+    for train_ind, test_ind in kf.split(X):
+        i += 1
+        X = np.array(X)
+        X_train, y_train = X[train_ind], y[train_ind]
+        X_test, y_test = X[test_ind], y[test_ind]
+        pca = PCA(n_components=desired_vec_dim, random_state=False)  # adjust yourself
+        pca.fit(X_train)
+        X_t_train = pca.transform(X_train)
+        X_t_test = pca.transform(X_test)
+
+        clf_pca.fit(X_t_train, y_train)
+
+        y_pred = clf_pca.predict(X_t_test)
+        score = np.mean(y_pred == y_test)
+        final_score += score
+        print(str(i) + ": accuracy:" + str(score))
+        tn, fp, fn, tp = confusion_matrix(y_test, y_pred).ravel()
+        print("tn:" + str(tn) + " fn:" + str(fn) + " tp:" + str(tp) + " fp:" + str(fp))
+        tnn += tn
+        tpp += tp
+        fnn += fn
+        fpp += fp
+
+    print("average score: " + str(final_score / 10))
+    print("total confusion matrix: tn:" + str(tnn) + " fn:" + str(fnn) + " tp:" + str(
+        tpp) + " fp:" + str(fpp))
+    print("completed pca kfold for " + str(desired_vec_dim) + "\n\n")
+
+
+def do_pca_kfold_w_loop(X, y):
+    clf_pca = get_model(1, False)
+
+    is_found = False
+
+    for p in range(10, 150, 10):
+        if p > 124 and not is_found:
+            p = 125
+            is_found = True
+        elif p > 124 and is_found:
+            break
+
+        print("started kfold for " + str(p))
+        kf = KFold(n_splits=10, shuffle=False, random_state=None)
+        i = 0
+        final_score = 0
+        tnn = 0
+        fnn = 0
+        tpp = 0
+        fpp = 0
+        for train_ind, test_ind in kf.split(X):
+            i += 1
+            X = np.array(X)
+            X_train, y_train = X[train_ind], y[train_ind]
+            X_test, y_test = X[test_ind], y[test_ind]
+            #pca = PCA(n_components=p, random_state=False)  # adjust yourself
+            pca = PCA(n_components=p, whiten=False, random_state=False)  # adjust yourself
+
+            pca.fit(X_train)
+            X_t_train = pca.transform(X_train)
+            X_t_test = pca.transform(X_test)
+
+            clf_pca.fit(X_t_train, y_train)
+
+            y_pred = clf_pca.predict(X_t_test)
+            score = np.mean(y_pred == y_test)
+            final_score += score
+            #print(str(i) + ": accuracy:" + str(score))
+            tn, fp, fn, tp = confusion_matrix(y_test, y_pred).ravel()
+            #print("tn:" + str(tn) + " fn:" + str(fn) + " tp:" + str(tp) + " fp:" + str(fp))
+            tnn += tn
+            tpp += tp
+            fnn += fn
+            fpp += fp
+
+        print("average score: " + str(final_score / 10))
+        print("total confusion matrix: tn:" + str(tnn) + " fn:" + str(fnn) + " tp:" + str(
+            tpp) + " fp:" + str(fpp))
+        print("completed kfold for " + str(p) + "\n\n")
+    print("done")
+
+
 def do_kfold(clf, X, y):
     print("started kfold")
     kf = KFold(n_splits=10)
     i = 0
     final_score = 0
+    tnn = 0
+    fnn = 0
+    tpp = 0
+    fpp = 0
     for train_ind, test_ind in kf.split(X):
         i += 1
         X = np.array(X)
@@ -815,8 +1010,14 @@ def do_kfold(clf, X, y):
         tn, fp, fn, tp = confusion_matrix(ytest, y_pred).ravel()
 
         print("tn:" + str(tn) + " fn:" + str(fn) + " tp:" + str(tp) + " fp:" + str(fp))
+        tnn += tn
+        tpp += tp
+        fnn += fn
+        fpp += fp
 
     print("average score: " + str(final_score / 10))
+    print("total confusion matrix: tn:" + str(tnn) + " fn:" + str(fnn) + " tp:" + str(
+        tpp) + " fp:" + str(fpp))
     print("completed kfold")
 
 
@@ -987,7 +1188,7 @@ def get_file(file_id):
 def get_model(model_id, prob_enabled):
     C = 1  # SVM regularization parameter
     if model_id == 1:
-        print("model type: SVM Linear Kernel. Prob enabled")
+        print("model type: SVM Linear Kernel")
         clf = svm.SVC(kernel="linear", C=1, probability=prob_enabled)
     elif model_id == 2:
         print("model type: SVM RBF Kernel")
@@ -1054,7 +1255,7 @@ def get_train_test_indexes(is_test, num_lines, percentage):
         test_end_index = 26
     else:
         train_start_index = 0
-        train_end_index = int(num_lines * (1-percentage))
+        train_end_index = int(num_lines * (1 - percentage))
         test_start_index = train_end_index
         test_end_index = num_lines
 
@@ -1093,6 +1294,14 @@ def print_ngram_statistics(clf):
     print("n-gram vocabulary size: " + str(len(vocabulary)))
 
 
+def get_pca_transformed_data(X_train, X_test):
+    pca = PCA(n_components=40, random_state=False)  # adjust yourself
+    pca.fit(X_train)
+    X_t_train = pca.transform(X_train)
+    X_t_test = pca.transform(X_test)
+    return X_t_train, X_t_test
+
+
 def main():
     try:
         test_enabled = True
@@ -1104,8 +1313,8 @@ def main():
             print("roma: " + str(mymodel.most_similar(positive=['roma'], topn=3)))
             print("italia: " + str(mymodel.most_similar(positive=['italia'], topn=3)))
             print("italy: " + str(mymodel.most_similar(positive=['italy'], topn=3)))
-            #test()
-            #exit(-1)
+            # test()
+            # exit(-1)
 
         ###PARAMETER INITIALIZATION STARTED####
         # "model type:1 SVM Linear Kernel" type:2 SVM RBF Kernel" type:3 Random Forest" type:4 Logistic Regression"type:5 KNeighborsClassifier"  type:6 n-grams with Tfidf")
@@ -1118,11 +1327,13 @@ def main():
 
         ###FLAG INITIALIZATION STARTED###
         normal_run_enabled = True
-        cross_val_enabled = True
+        cross_val_enabled = False
         probabilistic_evaluation_enabled = True
         kfold_enabled = True
         is_test = False
         train_vocab_enabled = False
+        pca_enabled = False
+        roc_graph_enabled = False
         ###FLAG INITIALIZATION COMPLETED###
 
         if train_vocab_enabled:
@@ -1155,6 +1366,15 @@ def main():
 
             y_pred = clf.predict(X_test)
             evaluate_train_test(clf, y_test, y_pred)
+
+            if pca_enabled:
+                print("started pca enabled model")
+                X_t_train, X_t_test = get_pca_transformed_data(X_train, X_test)
+                clf.fit(X_t_train, y_train)
+                y_t_pred = clf.predict(X_t_test)
+                evaluate_train_test(clf, y_test, y_t_pred)
+                print("completed pca enabled model")
+
             if not probabilistic_evaluation_enabled:
                 print("\nCOMPLETED TRAIN-TEST SPLIT. \n")
 
@@ -1176,6 +1396,12 @@ def main():
                                                                   filename, is_yes_1, test_percentage, is_test,
                                                                   num_lines)
                 evaluate_probability_based_train_test_model(clf_prob, X_train, y_train, X_test, y_test)
+                if pca_enabled:
+                    print("started pca enabled model")
+                    X_t_train, X_t_test = get_pca_transformed_data(X_train, X_test)
+                    evaluate_probability_based_train_test_model(clf_prob, X_t_train, y_train, X_t_test, y_test)
+                    print("completed pca enabled model")
+
                 print("\n COMPLETED PROBABILITY BASED EVALUATION. COMPLETED TRAIN-TEST\n")
 
         if cross_val_enabled:
@@ -1184,6 +1410,7 @@ def main():
             X_all, y_all = get_cross_val_input(feature_type, vocab_dimension, filename, is_yes_1)
             clf.fit(X_all, y_all)
             evaluate_cross_validation(clf, X_all, y_all)
+
             if not probabilistic_evaluation_enabled:
                 print("\nCOMPLETED CROSS VALIDATION. \n")
 
@@ -1201,12 +1428,9 @@ def main():
                 print("Y=0, N=1")
                 X_all, y_all = get_cross_val_input(feature_type, vocab_dimension, filename, is_yes_1)
 
-
                 evaluate_probability_based_cross_val_model(clf_prob, X_all, y_all)
-                evaluate_probability_based_stratified_cross_val_model(clf_prob, X_all, y_all)
 
                 print("\n COMPLETED PROBABILITY BASED EVALUATION. COMPLETED CROSS VALIDATION\n")
-
 
         if kfold_enabled:
             print("\nSTARTED K-FOLD. \n")
@@ -1215,7 +1439,20 @@ def main():
 
             print("Y=0, N=1")
             X_all, y_all = get_cross_val_input(feature_type, vocab_dimension, filename, is_yes_1)
+
             do_kfold(clf, X_all, y_all)
+            if roc_graph_enabled:
+                evaluate_probability_based_stratified_kfold_model(clf_prob, X_all, y_all)
+
+            if pca_enabled:
+                do_pca_kfold(X_all, y_all, 40)
+                #do_pca_kfold_w_loop(X_all, y_all)
+                if probabilistic_evaluation_enabled:
+                    print("\nSTARTED PROBABILITY BASED EVALUATION\n")
+                    clf_prob = get_model(model_id, True)
+                    if roc_graph_enabled:
+                        evaluate_probability_based_stratified_pca_kfold_model(clf_prob, X_all, y_all)
+                    print("\nCOMPLETED PROBABILITY BASED EVALUATION\n")
 
             print("\nCOMPLETED K-FOLD. \n")
     except Exception as exception:
