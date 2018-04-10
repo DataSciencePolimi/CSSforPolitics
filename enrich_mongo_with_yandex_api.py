@@ -15,7 +15,7 @@ try:
     counter_yandex_api_has_result_call = 0
     client = MongoClient('localhost:27017')
     db = client.TweetScraper
-
+    # Important note: There are nested loops here because the code is generating the value of datetime field which is indexed in MongoDB.
     for month in range(7,13):
         mymonth = str(month).rjust(2, '0')
         for day in range(15, 32):

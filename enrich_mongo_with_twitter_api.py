@@ -31,7 +31,7 @@ def main():
 
         counter_general = 0
         counter_new = 0
-
+        # Important note: There are nested loops here because the code is generating the value of datetime field which is indexed in MongoDB.
         for month in range(1, 13):
             mymonth = str(month).rjust(2, '0')
             for day in range(1, 32):
