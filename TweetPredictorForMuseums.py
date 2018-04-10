@@ -41,6 +41,14 @@ from sklearn import svm, datasets
 from scipy import interp
 from sklearn import cross_validation
 from sklearn.decomposition import PCA, RandomizedPCA
+from keras.models import Model
+from keras.layers import LSTM, Activation, Dense, Dropout, Input, Embedding
+from keras.optimizers import RMSprop
+from keras.preprocessing.text import Tokenizer
+from keras.preprocessing import sequence
+from keras.utils import to_categorical
+from keras.callbacks import EarlyStopping
+import seaborn as sns
 
 
 def remove_extra_chars_from_word(word):
@@ -1294,6 +1302,19 @@ def print_ngram_statistics(clf):
     print("n-gram vocabulary size: " + str(len(vocabulary)))
 
 
+def RNN(max_len, max_words):
+    inputs = Input(name='inputs',shape=[max_len])
+    layer = Embedding(max_words,50,input_length=max_len)(inputs)
+    layer = LSTM(64)(layer)
+    layer = Dense(256,name='FC1')(layer)
+    layer = Activation('relu')(layer)
+    layer = Dropout(0.5)(layer)
+    layer = Dense(1,name='out_layer')(layer)
+    layer = Activation('sigmoid')(layer)
+    model = Model(inputs=inputs,outputs=layer)
+    return model
+
+
 def get_pca_transformed_data(X_train, X_test):
     pca = PCA(n_components=40, random_state=False)  # adjust yourself
     pca.fit(X_train)
@@ -1302,8 +1323,48 @@ def get_pca_transformed_data(X_train, X_test):
     return X_t_train, X_t_test
 
 
+def lste(filename):
+    try:
+        data_df = pd.read_csv(filename)
+
+        data_df = data_df.ix[:, ['text', 'check']]
+        print(data_df.head)
+        print(data_df.info)
+
+        #sns.countplot(data_df.check)
+
+        X = data_df.text
+        Y = data_df.check
+        #le = LabelEncoder()
+        #Y = le.fit_transform(Y)
+        #Y = Y.reshape(1,-1)
+        Y = Y.replace("N", 1).replace("Y", 0)
+
+        X_train, X_test, Y_train, Y_test = train_test_split(X, Y, test_size=0.15)
+        max_words = 1000000
+        max_len = 1500000
+        tok = Tokenizer(num_words=max_words)
+        tok.fit_on_texts(X_train)
+        sequences = tok.texts_to_sequences(X_train)
+        sequences_matrix = sequence.pad_sequences(sequences, maxlen=max_len)
+
+        model = RNN(max_len, max_words)
+        model.summary()
+        model.compile(loss='binary_crossentropy', optimizer=RMSprop(), metrics=['accuracy'])
+        model.fit(sequences_matrix, Y_train, batch_size=128, epochs=10,
+                  validation_split=0.2, callbacks=[EarlyStopping(monitor='val_loss', min_delta=0.0001)])
+        test_sequences = tok.texts_to_sequences(X_test)
+        test_sequences_matrix = sequence.pad_sequences(test_sequences, maxlen=max_len)
+        accr = model.evaluate(test_sequences_matrix, Y_test)
+
+        print('Test set\n  Loss: {:0.3f}\n  Accuracy: {:0.3f}'.format(accr[0], accr[1]))
+    except Exception as ex:
+        print(ex)
+    print("done")
+
 def main():
     try:
+
         test_enabled = True
         if test_enabled:
             mymodel = get_trained_word2vec_model(25)
@@ -1343,6 +1404,8 @@ def main():
         clf = get_model(model_id, False)
         filename = get_file(6)
         num_lines = sum(1 for line in open(filename, newline='', encoding='utf-8'))
+
+        lste(filename)
 
         plot_wor2Vec_graph = False
         if plot_wor2Vec_graph:

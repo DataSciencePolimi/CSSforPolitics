@@ -13,10 +13,13 @@ def main():
 
     #sys.exit()
 
+
     consumer_key = 'your consumer key'
     consumer_secret = 'your consumer secret'
     access_token ='your access token'
     access_token_secret = 'your access token secret'
+
+
     try:
         auth = tweepy.OAuthHandler(consumer_key, consumer_secret)
         auth.set_access_token(access_token, access_token_secret)
@@ -39,7 +42,7 @@ def main():
                         mymin = str(min).rjust(2, '0')
                         for sec in range(0, 60):
                             mysec = str(sec).rjust(2, '0')
-                            filterdate = "2016-" + str(mymonth) + "-" + str(myday) + " " + str(myhour) + ":" + str(mymin) + ":" + str(mysec)
+                            filterdate = "2017-" + str(mymonth) + "-" + str(myday) + " " + str(myhour) + ":" + str(mymin) + ":" + str(mysec)
 
                             try:
                                 for res in db.tweet.find({"datetime": filterdate}):
@@ -60,7 +63,11 @@ def main():
                                     if counter_new % 100 == 0:
                                         print("new enrichment count:" + str(counter_new) + " date: " + filterdate + " " + str(res))
 
-                                    t = api.get_status(res["ID"])
+                                    t = api.get_status(res["ID"], tweet_mode='extended')
+                                    full = t.full_text
+
+                                    full = full.replace('|', ' ')
+                                    full = full.replace('\n', ' ')
                                     tw_retweet_count= t.retweet_count
                                     tw_favorite_count=t.favorite_count
                                     tw_favorited=t.favorited
@@ -105,7 +112,7 @@ def main():
                                     user_geo_enabled=t.author.geo_enabled
                                     user_default_profile=t.author.default_profile
                                     db.tweet.update({"ID": res["ID"]}, {
-                                        "$set": {"tw_retweet_count": tw_retweet_count, "tw_favorite_count": tw_favorite_count,
+                                        "$set": {"tw_full": full, "tw_retweet_count": tw_retweet_count, "tw_favorite_count": tw_favorite_count,
                                                  "tw_favorited": tw_favorited, "tw_hashtags": tw_hashtags, "tw_source": tw_source, "tw_geo": tw_geo,
                                                  "tw_coordinates": tw_coordinates, "tw_loc_country": tw_loc_country, "tw_loc_fullname": tw_loc_fullname, "tw_loc_name": tw_loc_name, "tw_loc_type": tw_loc_type, "tw_lang": tw_lang,
                                                  "user_location": user_location, "user_profile_image_url": user_profile_image_url,
