@@ -1,29 +1,37 @@
 from pymongo import MongoClient
 import logging as logger
-
+import re
 
 def is_eligible(tweet):
-    res = True
+    res = False
 
     if "api_res" in tweet:
         #to check the existence of tweets posted by bots, or tweets no longer active
-        res = False
+        return res
 
     if "tw_full" not in tweet:
         #full text content of tweet
-        res = False
+        return res
 
-    if "@" not in tweet:
-        #if tweet do not contain any mention
-        res = False
+    words = tweet["tw_full"].split(" ")
+    for word in words:
+        if word == "":
+            continue
+        if word[0] == "@":
+            res = True
+            break
 
     return res
 
 
 def extract_mentions(tweet):
     mentions = []
-    words = tweet.split[" "]
+
+    words = tweet["tw_full"].split(" ")
     for word in words:
+        if word == "":
+            continue
+
         if word[0] == "@":
             mentions.append(word)
 
@@ -37,14 +45,14 @@ def main():
 
         db = client.TweetScraper
 
-        filename = "tweet_mentions"
+        filename = "C:/tmp/tweet_mentions"
         file = open(filename, "w")
 
         logger.basicConfig(level="INFO", filename="mentions.log", format="%(asctime)s %(message)s")
         logger.info("started to extract mentions from mongo db")
         counter_eligible = 0
         counter_not_eligible = 0
-        for res in db.tweet.find():
+        for res in db.test.find():
             if res is None:
                 logger.info("There is no new iterable elements")
                 break
