@@ -4,14 +4,22 @@ import logging as logger
 import utils
 import globals
 
-#This class performs api calls using Botometer API, and creates a new file with bot scores based on an input file.
+#This class performs api calls using Botometer API, and creates a new file with bot scores from a given input file.
 
-def get_bot_scores(api, accounts):
+def request_bot_scores(api, accounts, file_write):
+    logger.info("nb of accounts to be requested:" + str(len(accounts)))
     accounts_w_bbs = {}
+    counter = 0
     for account in accounts:
+        counter += 1
         account = utils.remove_ampercant_first_char_if_exists(account)
         res = api.check_account(account)
+        logger.info("counter api call: " + str(counter))
         accounts_w_bbs[account] = res['scores']['universal']
+        file_write.write(account+","+res['scores']['universal'])
+        file_write.write("\n")
+
+    logger.info("nb of accounts successfully requested:" + str(len(accounts_w_bbs)))
     return accounts_w_bbs
 
 
@@ -22,7 +30,14 @@ def main():
         filename_write = filename_read + "_outtest"
         file_write = open(filename_write, "w", encoding='utf-8')
 
-        logger.info("started to bot detection")
+        logger.info("Started requesting bot scores")
+
+        #twitter_app_auth = {
+        #    'consumer_key': 'YOUR_KEY',
+        #    'consumer_secret': 'YOUR_SECRET',
+        #    'access_token': 'YOUR_TOKEN',
+        #    'access_token_secret': 'YOUR_TOKEN_SECRET',
+        #}
 
         twitter_app_auth = {
             'consumer_key': '5qCReXUD50uljLWk6swCkizTw',
@@ -30,9 +45,10 @@ def main():
             'access_token': '1559646294-IyP62RoCVwt6gM9mXFdJs2ZiyazLZEMtsFejX9I',
             'access_token_secret': 'sC5Gy0DgWaTfE6h6w3bQxCJ37w58lGyCbdj44qEzVwFRo',
         }
-        # bon = botornot.BotOrNot(**twitter_app_auth)
+
+        #mashape_key = "YOUR BOTOMETER API KEY"
+
         mashape_key = "mrI6bB5qjrmshTVQOHh20ZQwINjqp1JTYHdjsnFKeOCMEIgM36"
-        mashape_key2 = "szsWGLORHqmsh7hLrvOi8sS2AU1Pp1Q33ZWjsnGRKb7jC30wt6"
 
         api = botometer.Botometer(wait_on_ratelimit=True,
                                   mashape_key=mashape_key,
@@ -40,10 +56,10 @@ def main():
 
         input_list = [line.rstrip('\n') for line in open(filename_read)]
 
-        accounts_w_bbs = get_bot_scores(api, input_list)
-        utils.write_dict_to_file(file_write, accounts_w_bbs)
+        request_bot_scores(api, input_list,file_write)
+        #utils.write_dict_to_file(file_write, accounts_w_bbs)
 
-        logger.info("completed all")
+        logger.info("Completed all")
 
     except Exception as ex:
         logger.info(ex)
