@@ -6,18 +6,24 @@ import globals
 
 #This class performs api calls using Botometer API, and creates a new file with bot scores from a given input file.
 
+
 def request_bot_scores(api, accounts, file_write):
     logger.info("nb of accounts to be requested:" + str(len(accounts)))
     accounts_w_bbs = {}
     counter = 0
     for account in accounts:
-        counter += 1
-        account = utils.remove_ampercant_first_char_if_exists(account)
-        res = api.check_account(account)
-        logger.info("counter api call: " + str(counter))
-        accounts_w_bbs[account] = res['scores']['universal']
-        file_write.write(account+","+res['scores']['universal'])
-        file_write.write("\n")
+        try:
+            counter += 1
+            account = utils.remove_ampercant_first_char_if_exists(account)
+            res = api.check_account(account)
+            logger.info("counter api call: " + str(counter))
+            accounts_w_bbs[account] = res['scores']['universal']
+            file_write.write(account+","+str(res['scores']['universal']))
+            file_write.write("\n")
+            file_write.flush()
+        except Exception as ex:
+            logger.info(ex)
+            logger.info(traceback.format_exc())
 
     logger.info("nb of accounts successfully requested:" + str(len(accounts_w_bbs)))
     return accounts_w_bbs
@@ -32,32 +38,13 @@ def main():
 
         logger.info("Started requesting bot scores")
 
-        #twitter_app_auth = {
-        #    'consumer_key': 'YOUR_KEY',
-        #    'consumer_secret': 'YOUR_SECRET',
-        #    'access_token': 'YOUR_TOKEN',
-        #    'access_token_secret': 'YOUR_TOKEN_SECRET',
-        #}
-
-        twitter_app_auth = {
-            'consumer_key': '5qCReXUD50uljLWk6swCkizTw',
-            'consumer_secret': 'II1fSNwsLdB8GQvv8klC1FyHlEslobOrjybEIrl62dvQLweUvX',
-            'access_token': '1559646294-IyP62RoCVwt6gM9mXFdJs2ZiyazLZEMtsFejX9I',
-            'access_token_secret': 'sC5Gy0DgWaTfE6h6w3bQxCJ37w58lGyCbdj44qEzVwFRo',
-        }
-
-        #mashape_key = "YOUR BOTOMETER API KEY"
-
-        mashape_key = "mrI6bB5qjrmshTVQOHh20ZQwINjqp1JTYHdjsnFKeOCMEIgM36"
-
         api = botometer.Botometer(wait_on_ratelimit=True,
-                                  mashape_key=mashape_key,
-                                  **twitter_app_auth)
+                                  mashape_key=globals.mashape_key,
+                                  **globals.twitter_app_auth)
 
         input_list = [line.rstrip('\n') for line in open(filename_read)]
 
         request_bot_scores(api, input_list,file_write)
-        #utils.write_dict_to_file(file_write, accounts_w_bbs)
 
         logger.info("Completed all")
 
