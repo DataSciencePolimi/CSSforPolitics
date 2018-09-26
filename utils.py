@@ -35,6 +35,13 @@ def filter_out_bad_rows(df):
     return df
 
 
+def drop_nans(df):
+    logger.info(df.shape)
+    logger.info("dropping nans")
+    df = df.dropna()
+    logger.info(df.shape)
+
+
 def compose_new_columns(df):
     try:
         sizes_hashtags = []
@@ -44,10 +51,8 @@ def compose_new_columns(df):
         #print(df.columns[df.isna().any()].tolist())
         #print(df.loc[:, df.isna().any()])
         counter = 0
-        logger.info(df.shape)
-        logger.info("dropping nans")
-        df = df.dropna()
-        logger.info(df.shape)
+        drop_nans(df)
+
         for index, row in df['tw_full'].iteritems():
             if (pd.isnull(row)) :
                 logger.info(str(index))
