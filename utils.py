@@ -5,7 +5,7 @@ import nltk_utils
 import traceback
 
 
-def load_input_file_and_normalize_text(filename):
+def load_input_file(filename):
     df = pd.read_csv(filename, delimiter="~", encoding="ISO-8859-1", error_bad_lines=False,
                      names=globals.FILE_COLUMNS)
     return df

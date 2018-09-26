@@ -13,6 +13,8 @@ leave_hashtag_list = ["#independenceDay", "#leaveeuofficial", "#leaveeu", "leave
 WINDOWS_LOG_PATH = "F:/tmp/predictor.log"
 UNIX_LOG_PATH = "predictor.log"
 
+RUN_MODE = "TUNE_CLASSIFIER" #could be TUNE_CLASSIFIER or PREDICT_NEW_DATA
+
 ORIGINAL_TEXT_COLUMN = "tweet_text"
 PROCESSED_TEXT_COLUMN = "processed_text"
 
@@ -29,6 +31,10 @@ DATAFRAME_COLUMNS = ['tw_full', 'nbr_retweet', 'user_followers_count', 'user_fri
 TARGET_COLUMN = 'eye_p1'
 
 INPUT_FILE_NAME = "C:/_Documents/POLIMI/Research/Brexit/remain-leave-train-650.txt"
+
+INPUT_DISCOVER_NEUTRAL_FILE_NAME = "F:/tmp/test_neutrals.csv"
+
+OUTPUT_DISCOVER_NEUTRAL_FILE_NAME = "F:/tmp/test_neutrals_pred1.csv"
 
 TWITTER_APP_AUTH = {
    'consumer_key': 'YOUR_KEY',
@@ -75,4 +81,10 @@ NGRAM_BEST_PARAMS = {
     'vect__ngram_range': (1, 2),
     'tfidf__use_idf': False,
     'tfidf__norm': 'l2',
+}
+
+GRID_SEARCH_PARAMS_SVM = {
+    'vect__ngram_range': ((1, 1), (1, 2), (1, 3), (1, 4), (2, 2), (2, 3), (2, 4), (3, 3), (3, 4), (4, 4)),
+    'clf__kernel':('rbf', 'linear'),
+    'clf__C':(1, 10, 100, 1000),
 }
