@@ -5,12 +5,25 @@ import nltk_utils
 import traceback
 
 
-def load_input_file(filename):
+def load_input_file_and_normalize_text(filename):
     df = pd.read_csv(filename, delimiter="~", encoding="ISO-8859-1", error_bad_lines=False,
                      names=globals.FILE_COLUMNS)
-    df = compose_new_columns(df)
     return df
 
+
+def normalize_text(df):
+    df["processed_text"] = pd.Series(nltk_utils.text_preprocessing_for_tweet_texts(df["tw_full"].tolist()))
+
+
+def extract_new_features(df):
+    try:
+        hashtag_cnt, mention_cnt, flag_contains_weblink = extract_hashtags_mentions_linkexistences(df["tw_full"].tolist())
+        df["hashtag_cnt"] = pd.Series(hashtag_cnt)
+        df["mention_cnt"] = pd.Series(mention_cnt)
+        df["flag_contains_weblink"] = pd.Series(flag_contains_weblink)
+    except Exception as ex:
+        logger.error(ex)
+        logger.error(traceback.format_exc())
 
 
 def filter_out_bad_rows(df):
@@ -32,7 +45,6 @@ def filter_out_bad_rows(df):
     logger.info(str(df.shape))
 
     df = df.reset_index()
-    return df
 
 
 def drop_nans(df):
@@ -40,37 +52,6 @@ def drop_nans(df):
     logger.info("dropping nans")
     df = df.dropna()
     logger.info(df.shape)
-
-
-def compose_new_columns(df):
-    try:
-        sizes_hashtags = []
-        sizes_mentions = []
-        list_contains_link = []
-        # converting column types to int
-        #print(df.columns[df.isna().any()].tolist())
-        #print(df.loc[:, df.isna().any()])
-        counter = 0
-        drop_nans(df)
-
-        for index, row in df['tw_full'].iteritems():
-            if (pd.isnull(row)) :
-                logger.info(str(index))
-
-        #compose new fields
-        sizes_hashtags, sizes_mentions, list_contains_link = extract_hashtags_mentions_linkexistences(df["tw_full"].tolist())
-
-        #add new columns to dataframe
-        df["hashtag_count"] = pd.Series(sizes_hashtags)
-        df["mention_count"] = pd.Series(sizes_mentions)
-        df["contains_link"] = pd.Series(list_contains_link)
-        df["processed_text"] = pd.Series(nltk_utils.text_preprocessing_for_tweet_texts(df["tw_full"].tolist()))
-
-
-    except Exception as ex:
-        logger.error(ex)
-        logger.error(traceback.format_exc())
-    return df
 
 
 def extract_hashtags_mentions_linkexistences(tweets):

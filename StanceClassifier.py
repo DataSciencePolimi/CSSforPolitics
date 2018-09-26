@@ -27,21 +27,28 @@ class Classifier:
         try:
             logger.info("started")
 
-            df = utils.load_input_file(globals.INPUT_FILE_NAME)
+            df = utils.load_input_file_and_normalize_text(globals.INPUT_FILE_NAME)
 
+            #pre-processing operations
             utils.drop_nans(df)
+            utils.normalize_text(df)
+            utils.extract_new_features(df)
+
             logger.info("Read & Pre-processing & New columns composition complete. Total rowcount:" + str(len(df)))
 
+            #determine which ml classifier to use
             _self.clf = ml_utils.get_model("sgd")
 
+            #build the pipeline
             ##vect = CountVectorizer(ngram_range=(2, 3), analyzer='word', decode_error='replace', encoding='utf-8')
-
             vect = CountVectorizer()
             tfidf = TfidfTransformer()
-            print(np.arange(1, 11, 1))
+
             _self.pipeline = ml_utils.get_pipeline("single",vect, tfidf, _self.clf)
             logger.info(_self.pipeline.get_params().keys())
 
+
+            #fit the classifier with training data, and perform test to evaluate the classifier performance
             #ml_utils.find_best_parameters(globals.GRID_SEARCH_PARAMS_SGD, _self.pipeline, df[globals.PROCESSED_TEXT_COLUMN], df[globals.TARGET_COLUMN])
 
             #ml_utils.run_prob_based_train_test_kfold_roc_curve_plot(_self.pipeline, df[globals.PROCESSED_TEXT_COLUMN], df[globals.TARGET_COLUMN], True, False)
