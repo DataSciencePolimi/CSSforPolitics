@@ -372,7 +372,7 @@ def text_preprocessing_for_tweet_texts(tweets):
     processed_tweets = []
     for tweet in tweets:
         words = tokenize_tweet(tweet)
-        words = normalize(words)
+        words = normalize_for_political_stance(words)
         processed = untokenize(words)
         processed_tweets.append(processed)
     logger.info("tokenization steps completed")
@@ -468,7 +468,7 @@ def remove_punctuation(words):
     return new_words
 
 
-def replace_numbers(words):
+def replace_numbers_with_string(words):
     """Replace all interger occurrences in list of tokenized words with textual representation"""
     p = inflect.engine()
     new_words = []
@@ -477,6 +477,16 @@ def replace_numbers(words):
             new_word = p.number_to_words(word)
             new_words.append(new_word)
         else:
+            new_words.append(word)
+    return new_words
+
+
+def discard_numbers(words):
+    """Replace all interger occurrences in list of tokenized words with textual representation"""
+    p = inflect.engine()
+    new_words = []
+    for word in words:
+        if not word.isdigit():
             new_words.append(word)
     return new_words
 
@@ -528,14 +538,26 @@ def lemmatize_verbs(words):
     return lemmas
 
 
-def normalize(words):
+def normalize_general(words):
 
     words = remove_weblinks(words)
     words = remove_non_ascii(words)
     words = to_lowercase(words)
     words = remove_punctuation(words)
-    words = replace_numbers(words)
+    words = replace_numbers_with_string(words)
     words = remove_stopwords(words)
+
+    return words
+
+
+def normalize_for_political_stance(words):
+
+    words = remove_weblinks(words)
+    words = remove_non_ascii(words)
+    words = to_lowercase(words)
+    words = remove_punctuation(words)
+    words = discard_numbers(words)
+    #words = remove_stopwords(words)
 
     return words
 

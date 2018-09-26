@@ -14,9 +14,6 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import utils as utils
 from sklearn.pipeline import FeatureUnion
-import TextStatsTransformer
-import ItemSelector
-import VipTransformer
 import logging as logger
 import pandas as pd
 import globals
@@ -24,6 +21,7 @@ from sklearn.model_selection import StratifiedKFold
 from scipy import interp
 from time import time
 
+logger.basicConfig(level=logger.INFO, filename=globals.WINDOWS_LOG_PATH, format="%(asctime)s %(message)s")
 
 
 def find_best_parameters(parameters, pipeline, X, y):
@@ -49,9 +47,9 @@ def find_best_parameters(parameters, pipeline, X, y):
 
 def get_model(model_name):
     if model_name == "svm-linear":
-        return svm.SVC(kernel="linear", C=1)
+        return svm.SVC(kernel="linear", C=10)
     elif model_name == "svm-linear-prob":
-        return svm.SVC(kernel="linear", C=1, probability=True)
+        return svm.SVC(kernel="linear", C=10, probability=True)
     elif model_name == "svm-rbf":
         return svm.SVC(kernel='rbf', gamma=0.7, C=1)
     elif model_name == "xgboost":
@@ -62,6 +60,42 @@ def get_model(model_name):
         return LogisticRegression()
     elif model_name == "sgd":
         return SGDClassifier(**globals.SGD_BEST_PARAMS)
+
+
+def get_pipeline(feature_type, vect, tfidf, clf):
+    pipeline = None
+    if feature_type == "single":
+        pipeline = Pipeline([('vect', vect),
+                             ('tfidf', tfidf),
+                             ('clf', clf),
+                             ])
+    elif feature_type == "feature_union":
+        pipeline = Pipeline([
+
+            ('union', FeatureUnion(
+                transformer_list=[
+                    ('text_stats_pipe', Pipeline([
+                        ('selector', ItemSelector(key=globals.PROCESSED_TEXT_COLUMN)),
+                        ('text_stats', TextStatsTransformer()),
+                        ('special_keywords', VipTransformer()),
+                    ])),
+                    ('ngram_tf_idf', Pipeline([
+                        ('selector', ItemSelector(key=globals.PROCESSED_TEXT_COLUMN)),
+                        ('vect', vect),
+                        ('tf_idf', tfidf)
+                    ]))
+                ],
+
+                # weight components in FeatureUnion
+                transformer_weights={
+                    'text_stats_pipe': 1,
+                    'ngram_tf_idf': 0.3
+                }
+            )),
+            ('clf', clf)
+        ]
+        )
+    return pipeline
 
 
 def draw_confusion_matrix(y_test, y_pred):
@@ -110,10 +144,11 @@ def run_prob_based_train_test_kfold_roc_curve_plot(classifier, X, y, is_plot_ena
     aucs = []
     mean_fpr = np.linspace(0, 1, 100)
     y = label_binarize(y, classes=[0, 1])
-    logger.info(X)
     i = 0
+    logger.info("###" + str(n_splits) + "-fold started ###")
     try:
         for train, test in cv.split(X, y):
+            logger.info("## fold: " + str(i+1) + "started")
             X = np.array(X)
             X_train = X[train]
             y_train = y[train]
@@ -125,8 +160,11 @@ def run_prob_based_train_test_kfold_roc_curve_plot(classifier, X, y, is_plot_ena
             # Compute ROC curve and area the curve
             y_pred = probas_[:, 1]
             y_test = y[test]
+            logger.info("total test size: " + str(len(test)))
             if remove_low_pred:
-                y_test, y_pred = remove_low_pred_prob_prediction_entries(y_test, y_pred)
+                y_test, y_pred = discard_low_pred_prob_prediction_couple(y_test, y_pred)
+            print_false_predicted_entries(X_test, y_pred, y_test, True)
+
             fpr, tpr, thresholds = roc_curve(y_test, y_pred)
             tprs.append(interp(mean_fpr, fpr, tpr))
             tprs[-1][0] = 0.0
@@ -137,7 +175,7 @@ def run_prob_based_train_test_kfold_roc_curve_plot(classifier, X, y, is_plot_ena
                      label='ROC fold %d (AUC = %0.2f)' % (i, roc_auc))
 
             i += 1
-
+            logger.info("## fold: " + str(i+1) + "completed")
 
 
         mean_tpr = np.mean(tprs, axis=0)
@@ -166,7 +204,7 @@ def run_prob_based_train_test_kfold_roc_curve_plot(classifier, X, y, is_plot_ena
             plt.legend(loc="lower right")
             plt.show()
     except Exception as e:
-        print(e)
+        logger.error(e)
 
 
 def run_and_evaluate_train_test(is_binary_classification, is_scaling_enabled, classifier, X, y):
@@ -270,49 +308,44 @@ def draw_plt(lw, fpr, tpr, roc_auc):
     plt.show()
 
 
-def print_false_predicted_entries(inputs, predictions, labels):
+def print_false_predicted_entries(inputs, predictions, labels, is_prob_pred = False):
+
+    if is_prob_pred:
+        predictions = convert_continuous_prob_to_label(predictions)
+
+    counter_false_prediction = 0
     for input, prediction, label in zip(inputs, predictions, labels):
         if prediction != label:
+            counter_false_prediction += 1
             logger.info("### " + input + ' ### has been classified as ' + str(prediction) + ' and should be '+ str(label))
+    logger.info("total final test size: " + str(len(predictions)))
+    logger.info("false predicted records size: " + str(counter_false_prediction))
 
 
 def convert_continuous_prob_to_label(y_pred):
+    y_pred = np.asarray(y_pred)
     y_pred[y_pred > 0.5] = 1
     y_pred[y_pred <= 0.5] = 0
-    y_pred = label_binarize(y_pred, classes=[0, 1])
+    y_pred = y_pred.astype(int)
+    #y_pred = label_binarize(y_pred, classes=[0, 1])
     return y_pred
 
 
-def remove_low_pred_prob_prediction_entries(y_test, y_pred):
+def discard_low_pred_prob_prediction_couple(y_test, y_pred):
     y_test_new = []
     y_pred_new = []
     counter_discarded = 0
+    logger.info("total size of original entries: " + str(counter_discarded))
+
     for i in range(0, len(y_pred)):
-        if y_pred[i] > 0.4 and y_pred[i] < 0.6:
-            logger.info(str(i) + "th record pred prob: " + str(y_pred[i]) + ". It'll be discarded from evaluation part")
+        if y_pred[i] > 0.3 and y_pred[i] < 0.7:
+            logger.debug(str(i) + "th record pred prob: " + str(y_pred[i]) + ". It'll be discarded from evaluation part")
             counter_discarded += 1
             continue;
         y_pred_new.append(y_pred[i])
         y_test_new.append(y_test[i])
-    logger.info("number of discarded entries in evaluation part: " + str(counter_discarded))
-    return y_test_new, y_pred_new
+    logger.info("total size of discarded entries having low probability predictions scores: " + str(counter_discarded))
 
-
-def old_remove_low_pred_prob_prediction_entries(y_test, y_pred):
-    y_test_new = []
-    y_pred_new = []
-    counter_discarded = 0
-    for i in range(0, len(y_pred)):
-        pred_label = 0
-        if y_pred[i] > 0.4 and y_pred[i] < 0.6:
-            logger.info(str(i) + "th record pred prob: " + str(y_pred[i]) + ". It'll be discarded from evaluation part")
-            counter_discarded += 1
-            continue;
-        if y_pred[i] > 0.5:
-            pred_label = 1
-        y_pred_new.append(pred_label)
-        y_test_new.append(y_test[i])
-    logger.info("number of discarded entries in evaluation part: " + str(counter_discarded))
     return y_test_new, y_pred_new
 
 
@@ -348,7 +381,7 @@ def run_prob_based_train_test_roc_curve_plot(is_binary_classification, is_scalin
             plot_roc(y_test, y_pred)
 
         if remove_low_pred:
-            y_test, y_pred = remove_low_pred_prob_prediction_entries(y_test, y_pred)
+            y_test, y_pred = discard_low_pred_prob_prediction_couple(y_test, y_pred)
 
         y_pred = convert_continuous_prob_to_label(y_pred)
         print_evaluation_stats(y_test, y_pred)
@@ -394,37 +427,3 @@ def plot_roc(y_test, preds):
     plt.show()
 
 
-def get_pipeline(feature_type, vect, tfidf, clf):
-    pipeline = None
-    if feature_type == "single":
-        pipeline = Pipeline([('vect', vect),
-                             ('tfidf', tfidf),
-                             ('clf', clf),
-                             ])
-    elif feature_type == "feature_union":
-        pipeline = Pipeline([
-
-            ('union', FeatureUnion(
-                transformer_list=[
-                    ('text_stats_pipe', Pipeline([
-                        ('selector', ItemSelector(key=globals.PROCESSED_TEXT_COLUMN)),
-                        ('text_stats', TextStatsTransformer()),
-                        ('special_keywords', VipTransformer()),
-                    ])),
-                    ('ngram_tf_idf', Pipeline([
-                        ('selector', ItemSelector(key=globals.PROCESSED_TEXT_COLUMN)),
-                        ('vect', vect),
-                        ('tf_idf', tfidf)
-                    ]))
-                ],
-
-                # weight components in FeatureUnion
-                transformer_weights={
-                    'text_stats_pipe': 1,
-                    'ngram_tf_idf': 0.3
-                }
-            )),
-            ('clf', clf)
-        ]
-        )
-    return pipeline
