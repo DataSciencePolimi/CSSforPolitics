@@ -11,12 +11,6 @@ import globals
 import utils as utils
 import ml_utils
 import traceback
-# import logging as logger
-from sklearn import svm, naive_bayes, grid_search
-import numpy as np
-
-
-# LOAD_FILE = utils.load_input_file()
 
 
 class Classifier:
@@ -28,9 +22,6 @@ class Classifier:
     def build_model(_self):
         try:
             _self.logger.info("started")
-            #mode = "TRAIN-TUNE-THE-CLASSIFIER"
-            mode = "PREDICT_NEW_DATA_WITH_CLASSIFIER"
-
 
             df = utils.load_input_file(globals.INPUT_FILE_NAME)
 
@@ -53,17 +44,34 @@ class Classifier:
             _self.pipeline = ml_utils.get_pipeline("single", vect, tfidf, _self.clf)
 
             if globals.RUN_MODE == "TUNE_CLASSIFIER":
+                _self.logger.info("Model evaluation started.")
 
                 # fit the classifier with training data, and perform test to evaluate the classifier performance
+                ##################
+                ### GRID_SEARCH ##
                 #ml_utils.find_best_parameters(globals.GRID_SEARCH_PARAMS_SVM, _self.pipeline, df[globals.PROCESSED_TEXT_COLUMN], df[globals.TARGET_COLUMN])
+                ##################
 
-                ml_utils.run_prob_based_train_test_kfold_roc_curve_plot(_self.pipeline, df[globals.PROCESSED_TEXT_COLUMN],
-                                                                       df[globals.TARGET_COLUMN], True, True)
+                ###############################
+                ### K-FOLD-PROBABILITY-BASED###
+                ###############################
+                ml_utils.run_prob_based_train_test_kfold_roc_curve_plot(_self.pipeline, df[globals.PROCESSED_TEXT_COLUMN], df[globals.TARGET_COLUMN], True, True)
+                ###############################
 
-                # ml_utils.run_and_evaluate_train_test(False, False,_self.pipeline,df[globals.PROCESSED_TEXT_COLUMN], df[globals.TARGET_COLUMN])
-                #ml_utils.run_and_evaluate_cross_validation(True, False, _self.pipeline, df[globals.PROCESSED_TEXT_COLUMN],
-                # df[globals.TARGET_COLUMN], True)
+                ###############################
+                ### TRAIN-TEST-SPLIT-BASED#####
+                ###############################
+                #ml_utils.run_and_evaluate_train_test(False, False,_self.pipeline,df[globals.PROCESSED_TEXT_COLUMN], df[globals.TARGET_COLUMN])
+
+                ###########################################
+                ### TRAIN-TEST-SPLIT-PROBABILITY-BASED#####
+                ###########################################
                 # ml_utils.run_prob_based_train_test_roc_curve_plot(True, False, _self.pipeline, df[globals.PROCESSED_TEXT_COLUMN], df[globals.TARGET_COLUMN], False)
+
+                ###############################
+                ### CROSS-VALIDATION-BASED#####
+                ###############################
+                #ml_utils.run_and_evaluate_cross_validation(True, False, _self.pipeline, df[globals.PROCESSED_TEXT_COLUMN],df[globals.TARGET_COLUMN], True)
 
                 _self.logger.info("Model evaluation complete.")
             elif globals.RUN_MODE == "PREDICT_NEW_DATA":
@@ -71,7 +79,7 @@ class Classifier:
                 # train the classifier
                 _self.pipeline.fit(df[globals.PROCESSED_TEXT_COLUMN], df[globals.TARGET_COLUMN])
 
-                # predict new data
+                # predict over new data
                 df_discover = utils.load_input_file(globals.INPUT_DISCOVER_NEUTRAL_FILE_NAME)
                 utils.normalize_text(df_discover)
 
@@ -83,13 +91,17 @@ class Classifier:
                 y_discover_pred = probas_[:, 1]
 
                 df_discover["pred_p1_prob"] = pd.Series(y_discover_pred)
-                #ml_utils.discard_low_pred_prob_prediction_single(df_discover)
+
                 _self.logger.info(str(df_discover.shape))
+                # discard gray area, the records having less probability of being truly predicted
                 df_discover = df_discover[(df_discover.pred_p1_prob>0.7) | (df_discover.pred_p1_prob <0.3)]
                 _self.logger.info(str(df_discover.shape))
+
+                # convert from float to integer
                 converted = ml_utils.convert_continuous_prob_to_label(df_discover["pred_p1_prob"].tolist())
                 df_discover["final_pred_p1"] = pd.Series(converted)
 
+                #write to file
                 df_discover.to_csv(globals.OUTPUT_DISCOVER_NEUTRAL_FILE_NAME, sep="~")
                 _self.logger.info("complete.")
 
