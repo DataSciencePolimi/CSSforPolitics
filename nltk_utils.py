@@ -367,10 +367,14 @@ def get_ml_model(model_id, prob_enabled):
     return clf
 
 
-def text_preprocessing_for_tweet_texts(tweets):
+def normalize_text(tweets):
 
     processed_tweets = []
+    counter = 0
     for tweet in tweets:
+        counter += 1
+        if(counter%1000 == 0):
+            logger.info(str(counter) + " out of " + str(len(tweets)) + " completed")
         words = tokenize_tweet(tweet)
         words = normalize_for_political_stance(words)
         processed = untokenize(words)
@@ -379,6 +383,12 @@ def text_preprocessing_for_tweet_texts(tweets):
     logger.info("normalizing steps completed")
 
     return processed_tweets
+
+
+def preprocess_text(df):
+    # pre-processing operations
+    normalized = normalize_text(df["text"].tolist())
+    df["processed_text"] = pd.Series(normalized)
 
 
 def json_to_csv_converter(filename_read, filename_write, preprocessing=True):
@@ -491,6 +501,14 @@ def discard_numbers(words):
     return new_words
 
 
+def discard_mentions(words):
+    new_words = []
+    for word in words:
+        if word[0] != '@':
+            new_words.append(word)
+    return new_words
+
+
 def remove_stopwords(words):
     """Remove stop words from list of tokenized words"""
     new_words = []
@@ -557,7 +575,8 @@ def normalize_for_political_stance(words):
     words = to_lowercase(words)
     words = remove_punctuation(words)
     words = discard_numbers(words)
-    #words = remove_stopwords(words)
+    words = discard_mentions(words)
+    words = remove_stopwords(words)
 
     return words
 

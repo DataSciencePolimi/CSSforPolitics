@@ -62,6 +62,7 @@ def get_model(model_name):
         return SGDClassifier(**globals.SGD_BEST_PARAMS)
 
 
+
 def get_pipeline(feature_type, vect, tfidf, clf):
     pipeline = None
     if feature_type == "single":
@@ -132,13 +133,14 @@ def run_and_evaluate_cross_validation(is_binary_classification, is_scaling_enabl
     print_false_predicted_entries(X, y_pred, y)
     logger.info(metrics.classification_report(y, y_pred, target_names=None))
     print_confusion_matrix(is_binary_classification, y, y_pred)
+    print_evaluation_stats(y, y_pred,False)
 
     if is_plot_enabled:
         draw_confusion_matrix(y, y_pred)
 
 
-def run_prob_based_train_test_kfold_roc_curve_plot(classifier, X, y, is_plot_enabled=True,remove_low_pred=False):
-    n_splits = 6
+def run_prob_based_train_test_kfold_roc_curve_plot(classifier, X, y, is_plot_enabled=True,discard_low_pred=False):
+    n_splits = 10
     cv = StratifiedKFold(n_splits=n_splits)
     tprs = []
     aucs = []
@@ -146,6 +148,7 @@ def run_prob_based_train_test_kfold_roc_curve_plot(classifier, X, y, is_plot_ena
     y = label_binarize(y, classes=[0, 1])
     i = 0
     logger.info("###" + str(n_splits) + "-fold started ###")
+    cum_f1_score = 0
     try:
         for train, test in cv.split(X, y):
             logger.info("## fold: " + str(i+1) + "started")
@@ -160,10 +163,10 @@ def run_prob_based_train_test_kfold_roc_curve_plot(classifier, X, y, is_plot_ena
             # Compute ROC curve and area the curve
             y_pred = probas_[:, 1]
             y_test = y[test]
-            logger.info("total test size: " + str(len(test)))
-            if remove_low_pred:
+            if discard_low_pred:
                 y_test, y_pred = discard_low_pred_prob_prediction_couple(y_test, y_pred)
             print_false_predicted_entries(X_test, y_pred, y_test, True)
+            cum_f1_score += print_evaluation_stats(y_test, y_pred, True)
 
             fpr, tpr, thresholds = roc_curve(y_test, y_pred)
             tprs.append(interp(mean_fpr, fpr, tpr))
@@ -177,7 +180,7 @@ def run_prob_based_train_test_kfold_roc_curve_plot(classifier, X, y, is_plot_ena
             i += 1
             logger.info("## fold: " + str(i+1) + "completed")
 
-
+        logger.info("Average weighted F1-score: " + str(cum_f1_score/n_splits))
         mean_tpr = np.mean(tprs, axis=0)
         mean_tpr[-1] = 1.0
         mean_auc = auc(mean_fpr, mean_tpr)
@@ -223,16 +226,20 @@ def run_and_evaluate_train_test(is_binary_classification, is_scaling_enabled, cl
     logger.info("accuracy score:" + str(accuracy_score(y_test, y_pred)))
     print_confusion_matrix(is_binary_classification, y_test, y_pred)
     logger.info(metrics.classification_report(y_test, y_pred, target_names=None))
-    print_evaluation_stats(y_test, y_pred)
+    print_evaluation_stats(y_test, y_pred, False)
     draw_confusion_matrix(y_test, y_pred)
     print("ok")
 
 
-def print_evaluation_stats(y_test, y_pred):
+def print_evaluation_stats(y_test, y_pred, is_prob_pred):
+    if is_prob_pred:
+        y_pred = [0 if x < 0.5 else 1 for x in y_pred]
+
     logger.info("Accuracy Score:" + str(accuracy_score(y_test, y_pred)))
     logger.info("Precision Score:" + str(precision_score(y_test, y_pred, average='weighted')))
     logger.info("Recall Score:" + str(recall_score(y_test, y_pred, average='weighted')))
     logger.info("F1 Score:" + str(f1_score(y_test, y_pred, average='weighted')))
+    return f1_score(y_test, y_pred, average='weighted')
 
 
 def tryy():
@@ -311,7 +318,7 @@ def draw_plt(lw, fpr, tpr, roc_auc):
 def print_false_predicted_entries(inputs, predictions, labels, is_prob_pred = False):
 
     if is_prob_pred:
-        predictions = convert_continuous_prob_to_label(predictions)
+        predictions = [0 if x < 0.5 else 1 for x in predictions]
 
     counter_false_prediction = 0
     for input, prediction, label in zip(inputs, predictions, labels):
@@ -322,23 +329,14 @@ def print_false_predicted_entries(inputs, predictions, labels, is_prob_pred = Fa
     logger.info("false predicted records size: " + str(counter_false_prediction))
 
 
-def convert_continuous_prob_to_label(y_pred):
-    y_pred = np.asarray(y_pred)
-    y_pred[y_pred > 0.5] = 1
-    y_pred[y_pred <= 0.5] = 0
-    y_pred = y_pred.astype(int)
-    #y_pred = label_binarize(y_pred, classes=[0, 1])
-    return y_pred
-
-
 def discard_low_pred_prob_prediction_couple(y_test, y_pred):
     y_test_new = []
     y_pred_new = []
     counter_discarded = 0
-    logger.info("total size of original entries: " + str(counter_discarded))
+    logger.info("total size of original entries: " + str(len(y_pred)))
 
     for i in range(0, len(y_pred)):
-        if y_pred[i] > 0.3 and y_pred[i] < 0.7:
+        if y_pred[i] > 0.2 and y_pred[i] < 0.8:
             logger.debug(str(i) + "th record pred prob: " + str(y_pred[i]) + ". It'll be discarded from evaluation part")
             counter_discarded += 1
             continue;
@@ -383,9 +381,9 @@ def run_prob_based_train_test_roc_curve_plot(is_binary_classification, is_scalin
         if remove_low_pred:
             y_test, y_pred = discard_low_pred_prob_prediction_couple(y_test, y_pred)
 
-        y_pred = convert_continuous_prob_to_label(y_pred)
-        print_evaluation_stats(y_test, y_pred)
-        print_false_predicted_entries(X_test, y_pred, y_test)
+        new_list = [0 if x<0.5 else 1 for x in y_pred]
+        print_false_predicted_entries(X_test, y_pred, y_test, True)
+        print_evaluation_stats(y_test, y_pred, True)
 
 
 def svc_param_selection(X, y, nfolds):
