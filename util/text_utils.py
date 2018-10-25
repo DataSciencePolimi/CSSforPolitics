@@ -28,9 +28,18 @@ import pandas as pd
 from scipy.stats.stats import pearsonr
 import numpy as np
 import sys
-import utils as utils
 import logging as logger
 import traceback
+import spacy
+import gensim
+import util
+import gensim.corpora as corpora
+
+
+###########################################################
+#In this file, there are only the text utility methods####
+###########that may be used only once or more##############
+###########################################################
 
 
 def untokenize(words):
@@ -78,6 +87,34 @@ def read_tweets_in_json_format(filename, is_for_test):
         counter += 1
 
     return np.array(tweets)
+
+
+def remove_ampercant_first_char_if_exists(input):
+    if(input[0] == "@"):
+        input = input[1:len(input)]
+    return input
+
+
+def sent_to_words(sentences):
+    for sentence in sentences:
+        yield (gensim.utils.simple_preprocess(str(sentence), deacc=True))  # deacc=True removes punctuations
+
+
+def make_bigrams(texts, bigram_mod):
+    return [bigram_mod[doc] for doc in texts]
+
+
+def make_trigrams(texts, bigram_mod, trigram_mod):
+    return [trigram_mod[bigram_mod[doc]] for doc in texts]
+
+
+def lemmatization(nlp, texts, allowed_postags=['NOUN', 'ADJ', 'VERB', 'ADV']):
+    """https://spacy.io/api/annotation"""
+    texts_out = []
+    for sent in texts:
+        doc = nlp(" ".join(sent))
+        texts_out.append([token.lemma_ for token in doc if token.pos_ in allowed_postags])
+    return texts_out
 
 
 def remove_extra_chars_from_word(word):
@@ -222,9 +259,23 @@ def train_evaluate_probability_based_train_test_model(clf_prob, X_train, y_train
         plot_roc(y_test, y_pred_prob)
 
 
+def lemmatize(data_words_bigrams):
+
+    #python3 -m spacy download en
+
+    logger.info("spacy - lemmatization started")
+    nlp = spacy.load('en', disable=['parser', 'ner'])
+
+    #Do lemmatization keeping only noun, adj, vb, adv
+    data_lemmatized = lemmatization(nlp, data_words_bigrams, allowed_postags=['NOUN', 'ADJ', 'VERB', 'ADV'])
+    logger.info("spacy - lemmatization completed")
+    data_lemmatized = remove_stopwords(data_lemmatized)
+    return data_lemmatized
+
+
 def ratio(y_true, y_pred, pct):
     if y_pred.ndim == 2:
-        y_pred = y_pred[:, 1]
+            y_pred = y_pred[:, 1]
     n = int(round(len(y_true) * pct))
     idx = np.argsort(y_pred)[-n:]
     prob_min = y_pred[idx[0]]
@@ -255,6 +306,64 @@ def plot_roc(y_test, preds):
     plt.show()
 
 
+def prepare_lda_input(df, lemmatization_enabled = False):
+    df_processed = preprocess_text_for_topic_discovery(df)
+
+    data_words = list(sent_to_words(df_processed))
+
+    # Build the bigram and trigram models
+    bigram = gensim.models.Phrases(data_words, min_count=5, threshold=100)  # higher threshold fewer phrases.
+
+    # Faster way to get a sentence clubbed as a trigram/bigram
+    bigram_mod = gensim.models.phrases.Phraser(bigram)
+
+    # Form Bigrams
+    data_words_bigrams = make_bigrams(data_words, bigram_mod)
+    logger.info(data_words_bigrams[:1])
+
+    if lemmatization_enabled:
+        data_words_bigrams = lemmatize(data_words_bigrams)
+
+    # Create Dictionary
+    logger.info("creating corpora")
+
+    # id2word = corpora.Dictionary(data_lemmatized)
+    id2word = corpora.Dictionary(data_words_bigrams)
+
+    # Create Corpus
+    texts = data_words_bigrams
+
+    # Term Document Frequency
+    corpus = [id2word.doc2bow(text) for text in texts]
+    # df["bow"]=corpus
+
+    # View
+    logger.info(corpus[:1])
+
+    logger.info([[(id2word[id], freq) for id, freq in cp] for cp in corpus[:1]])
+    return corpus, id2word, data_words_bigrams
+
+
+def preprocess_text_for_topic_discovery(df):
+    logger.info("dropping nans")
+    util.drop_nans(df)
+    logger.info("removing unwanted words")
+    util.remove_unwanted_words_from_df(df)
+    logger.info("nltk preprocessing")
+    preprocess_text(df)
+    logger.info("removing word count lower than 2")
+    mylist = df['processed_text'].tolist()
+    new_list = []
+    for line in mylist:
+        split = line.split()
+        if len(split)>2:
+            new_list.append(line)
+    df_new = pd.Series(new_list)
+    #df['total_words'] = df['processed_text'].str.split().str.len()
+    #df_new = df[df['total_words']>2]
+    return df_new
+
+
 def remove_polarized_hashtags_urls(tweet):
     eliminated_text = ""
     splits = tweet.split(" ")
@@ -262,7 +371,7 @@ def remove_polarized_hashtags_urls(tweet):
         if word == "":
             continue
         lowerr = word.lower()
-        if lowerr in remain_hashtag_list or lowerr in leave_hashtag_list:
+        if lowerr in globals.HASHTAG_REMAIN or lowerr in globals().HASHTAG_LEAVE:
             continue
         if "http" in word:
             continue
@@ -296,6 +405,19 @@ def convert_text_to_word2vec(data, dimension, model):
 
     np_vect_means = np.asarray(vect_means)
     return np_vect_means
+
+
+def extract_mentions_from_text(text):
+
+    mentions = []
+
+    words = text.split()
+    for word in words:
+        if word[0] == "@":
+            word = word.lower()
+            mentions.append(word)
+
+    return mentions
 
 
 def evaluate_train_test(clf, y_test, y_pred):
