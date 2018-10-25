@@ -1,7 +1,7 @@
 from sklearn.model_selection import cross_val_score, cross_val_predict, GridSearchCV, train_test_split, RandomizedSearchCV
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import roc_curve, auc, precision_score, recall_score, f1_score, accuracy_score, confusion_matrix, roc_auc_score
-from sklearn import metrics, svm, datasets
+from sklearn import metrics, datasets
 from sklearn.linear_model import LogisticRegression, SGDClassifier
 from sklearn.multiclass import OneVsRestClassifier
 from sklearn.preprocessing import label_binarize
@@ -12,16 +12,89 @@ from sklearn import svm
 from xgboost import XGBClassifier
 import matplotlib.pyplot as plt
 import seaborn as sns
-import utils as utils
 from sklearn.pipeline import FeatureUnion
 import logging as logger
 import pandas as pd
-import globals
+from util import globals
 from sklearn.model_selection import StratifiedKFold
 from scipy import interp
 from time import time
+from gensim.models import CoherenceModel
+import pyLDAvis
+import pyLDAvis.gensim  # don't skip this
+import gensim
+from sklearn.utils import shuffle
+from sklearn.model_selection import KFold
 
-logger.basicConfig(level=logger.INFO, filename=globals.WINDOWS_LOG_PATH, format="%(asctime)s %(message)s")
+if(globals.os=="windows"):
+    log_path = "F:/tmp/predictor.log"
+else:
+    log_path = "predictor.log"
+
+logger.basicConfig(level=logger.INFO, filename=log_path, format="%(asctime)s %(message)s")
+
+
+
+###########################################################
+#######In this file, there are only the ml methods ########
+###########that may be used only once or more##############
+###########################################################
+
+
+def build_lda_model(corpus, id2word, topic_cnt):
+    lda_model = gensim.models.ldamodel.LdaModel(corpus=corpus,
+                                                id2word=id2word,
+                                                num_topics=topic_cnt,
+                                                random_state=100,
+                                                update_every=1,
+                                                chunksize=100,
+                                                passes=10,
+                                                alpha='auto',
+                                                per_word_topics=True)
+    return lda_model
+
+
+def evaluate_lda_results(corpus, id2word, data_words_bigrams, lda_model, topic_cnt, filename_read, visual_enabled = True):
+    top_topics = lda_model.top_topics(corpus=corpus)
+
+    # Average topic coherence is the sum of topic coherences of all topics, divided by the number of topics.
+    avg_topic_coherence = sum([t[1] for t in top_topics]) / topic_cnt
+    logger.info("Average topic coherence: " + str(avg_topic_coherence))
+
+    logger.info("top topics ordered by coherence score")
+    logger.info(str(top_topics))
+
+    # Print the Keyword in the 10 topics
+    logger.info("topics: " + str(lda_model.print_topics()))
+
+    logger.info("completed operations")
+
+    # Print the Keyword in the 10 topics
+    logger.info(lda_model.print_topics())
+    logger.info("topics: : " + str(lda_model.print_topics()))
+
+    # mallet operations... comment line because takes error in ubuntu
+    # logger.info("ldamallet topics: " + ldamallet.show_topics(formatted=False))
+    # Compute Coherence Score
+    # coherence_model_ldamallet = CoherenceModel(model=ldamallet, texts=texts, dictionary=id2word,coherence='c_v')
+    # coherence_ldamallet = coherence_model_ldamallet.get_coherence()
+    # logger.info('\nldamallet Coherence Score: ', coherence_ldamallet)
+
+    # Compute Perplexity
+    logger.info("Perplexity: %s", lda_model.log_perplexity(corpus))
+
+    # Compute Coherence Score
+    coherence_model_lda = CoherenceModel(model=lda_model, texts=data_words_bigrams, dictionary=id2word,
+                                         coherence='c_v')
+    coherence_lda = coherence_model_lda.get_coherence()
+    logger.info("Coherence Score: " + str(coherence_lda))
+
+    # Visualize the topics
+    # pyLDAvis.enable_notebook()
+    if visual_enabled:
+        vis = pyLDAvis.gensim.prepare(lda_model, corpus, id2word)
+        lda_file = filename_read + "_LDA_Visualization.html"
+        pyLDAvis.save_html(vis, lda_file)
 
 
 def find_best_parameters(parameters, pipeline, X, y):
@@ -60,7 +133,6 @@ def get_model(model_name):
         return LogisticRegression()
     elif model_name == "sgd":
         return SGDClassifier(**globals.SGD_BEST_PARAMS)
-
 
 
 def get_pipeline(feature_type, vect, tfidf, clf):
@@ -125,7 +197,7 @@ def print_confusion_matrix(is_binary_classification, y_test, y_pred):
 def run_and_evaluate_cross_validation(is_binary_classification, is_scaling_enabled, classifier, X, y, is_plot_enabled=False):
     if is_scaling_enabled:
         X = scale_X(X)
-
+    X, y = shuffle(X, y)
     cross_val_scores = cross_val_score(classifier, X, y, cv=10)
     logger.info(str(cross_val_scores))
     logger.info("cross val score: " + str(cross_val_scores.mean()))
@@ -138,9 +210,53 @@ def run_and_evaluate_cross_validation(is_binary_classification, is_scaling_enabl
     if is_plot_enabled:
         draw_confusion_matrix(y, y_pred)
 
+def cross_validate(model, x, y, folds=10, repeats=5):
+    '''
+    Function to do the cross validation - using stacked Out of Bag method instead of averaging across folds.
+    model = algorithm to validate. Must be scikit learn or scikit-learn like API (Example xgboost XGBRegressor)
+    x = training data, numpy array
+    y = training labels, numpy array
+    folds = K, the number of folds to divide the data into
+    repeats = Number of times to repeat validation process for more confidence
+    '''
+    try:
+        ypred = np.zeros((len(y),repeats))
+        score = np.zeros(repeats)
+        x = np.array(x)
+        for r in range(repeats):
+            i=0
+            print('Cross Validating - Run', str(r + 1), 'out of', str(repeats))
+            x,y = shuffle(x,y,random_state=r) #shuffle data before each repeat
+            kf = KFold(n_splits=folds,random_state=i+1000) #random split, different each time
+            for train_ind,test_ind in kf.split(x):
+                print('Fold', i+1, 'out of',folds)
+                xtrain,ytrain = x[train_ind,:],y[train_ind]
+                xtest,ytest = x[test_ind,:],y[test_ind]
+                model.fit(xtrain, ytrain)
+                ypred[test_ind,r]=model.predict(xtest)
+                i+=1
+            score[r] = R2(ypred[:,r],y)
+        print('\nOverall R2:',str(score))
+        print('Mean:',str(np.mean(score)))
+        print('Deviation:',str(np.std(score)))
 
-def run_prob_based_train_test_kfold_roc_curve_plot(classifier, X, y, is_plot_enabled=True,discard_low_pred=False):
+    except Exception as ex:
+        logger.error(str(ex))
+
+def R2(ypred, ytrue):
+    y_avg = np.mean(ytrue)
+    SS_tot = np.sum((ytrue - y_avg)**2)
+    SS_res = np.sum((ytrue - ypred)**2)
+    r2 = 1 - (SS_res/SS_tot)
+    return r2
+
+
+def run_prob_based_train_test_kfold_roc_curve_plot(classifier, x, y, is_plot_enabled=True, discard_low_pred=False):
+    min_discard_prob=0.2
+    max_discard_prob=0.8
     n_splits = 10
+    y = label_binarize(y, classes=[0, 1])
+    x, y = shuffle(x, y)
     cv = StratifiedKFold(n_splits=n_splits)
     tprs = []
     aucs = []
@@ -150,21 +266,26 @@ def run_prob_based_train_test_kfold_roc_curve_plot(classifier, X, y, is_plot_ena
     logger.info("###" + str(n_splits) + "-fold started ###")
     cum_f1_score = 0
     try:
-        for train, test in cv.split(X, y):
+        cnt = 0
+
+        for train, test in cv.split(x, y):
+
             logger.info("## fold: " + str(i+1) + "started")
-            X = np.array(X)
-            X_train = X[train]
+            x = np.array(x)
+            y = np.array(y)
+            X_train = x[train]
             y_train = y[train]
-            X_test = X[test]
+            X_test = x[test]
+            y_test = y[test]
+
             classifier.fit(X_train, y_train)
             probas_ = classifier.predict_proba(X_test)
 
             # probas_ = classifier.fit(X[train], y[train]).predict_proba(X[test])
             # Compute ROC curve and area the curve
             y_pred = probas_[:, 1]
-            y_test = y[test]
             if discard_low_pred:
-                y_test, y_pred = discard_low_pred_prob_prediction_couple(y_test, y_pred)
+                y_test, y_pred = discard_low_pred_prob_prediction_couple(y_test, y_pred,min_discard_prob, max_discard_prob)
             print_false_predicted_entries(X_test, y_pred, y_test, True)
             cum_f1_score += print_evaluation_stats(y_test, y_pred, True)
 
@@ -315,28 +436,28 @@ def draw_plt(lw, fpr, tpr, roc_auc):
     plt.show()
 
 
-def print_false_predicted_entries(inputs, predictions, labels, is_prob_pred = False):
+def print_false_predicted_entries(inputs, predictions_prob, labels, is_prob_pred = False):
 
     if is_prob_pred:
-        predictions = [0 if x < 0.5 else 1 for x in predictions]
+        predictions = [0 if x < 0.5 else 1 for x in predictions_prob]
 
     counter_false_prediction = 0
     for input, prediction, label in zip(inputs, predictions, labels):
-        if prediction != label:
+        if prediction != label[0]:
             counter_false_prediction += 1
             logger.info("### " + input + ' ### has been classified as ' + str(prediction) + ' and should be '+ str(label))
     logger.info("total final test size: " + str(len(predictions)))
     logger.info("false predicted records size: " + str(counter_false_prediction))
 
 
-def discard_low_pred_prob_prediction_couple(y_test, y_pred):
+def discard_low_pred_prob_prediction_couple(y_test, y_pred, min_discard_prob, max_discard_prob):
     y_test_new = []
     y_pred_new = []
     counter_discarded = 0
     logger.info("total size of original entries: " + str(len(y_pred)))
 
     for i in range(0, len(y_pred)):
-        if y_pred[i] > 0.2 and y_pred[i] < 0.8:
+        if y_pred[i] > min_discard_prob and y_pred[i] < max_discard_prob:
             logger.debug(str(i) + "th record pred prob: " + str(y_pred[i]) + ". It'll be discarded from evaluation part")
             counter_discarded += 1
             continue;

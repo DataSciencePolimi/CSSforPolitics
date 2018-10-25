@@ -9,7 +9,8 @@ import sys
 import logging as logger
 import traceback
 
-def main():
+
+def enrich_mongo_w_tweet_metadata():
     consumer_key = sys.argv[1]
     consumer_secret = sys.argv[2]
     access_token = sys.argv[3]
@@ -167,6 +168,7 @@ def main():
     except Exception as exception:
         logger.info('Oops!  An error occurred.  Try again...', exception)
         logger.error(log_path)
+
 
 if __name__ == "__main__":
     main()

@@ -1,5 +1,11 @@
 from scipy.stats import randint as sp_randint
 
+###########################################################
+#In this file, there are only the constant variables#######
+###########that may be used only once or more##############
+###########################################################
+
+os = "windows"
 
 WINDOWS_LOG_PATH = "F:/tmp/predictor.log"
 UNIX_LOG_PATH = "predictor.log"
@@ -19,6 +25,8 @@ TRAIN_FILE_COLUMNS_MLMA = ["ID", "nbr_retweet", "nbr_favorite", "nbr_reply", "da
 
 TRAIN_FILE_COLUMNS = ["ID", "user_id", "datetime", "text"]
 
+STANCE_FILE_COLUMNS = ["ID", "user_id", "datetime", "text", "r1"]
+
 DISCOVER_FILE_COLUMNS = ["ID", "user_id", "datetime", "text"]
 
 
@@ -32,7 +40,7 @@ TARGET_COLUMN = 'r1'
 
 INPUT_FILE_NAME_RB = "F:/tmp/full_en3.csv_out.csv"
 INPUT_FILE_NAME_TRAIN_MLRB = "F:/tmp/random_stance_1_2_sample10K.csv"
-INPUT_FILE_NAME_TRAIN_MLMA = "F:/tmp/train-mlma.txt"
+INPUT_FILE_NAME_TRAIN_MLMA = "F:/tmp/train-mlma-1900.txt"
 
 INPUT_FILE_NAME_TEST = "F:/tmp/remain-leave-train-650.txt"
 INPUT_FILE_NAME_DISCOVER_PREDICT_NEUTRALS = "F:/tmp/test2.txt"
@@ -109,3 +117,11 @@ MAX_PROB = 0.9
 MIN_PROB = 0.1
 
 ELIMINATE_LOW_PROB = True
+
+p2_times = ['2016-01', '2016-02', '2016-03', '2016-04', '2016-05', '2016-06-0', '2016-06-1', '2016-06-20', '2016-06-21']
+p3_times = ['2016-06-22', '2016-06-23', '2016-06-24']
+p4_times = ['2016-06-25', '2016-06-27', '2016-06-28', '2016-06-29', '2016-06-3','2016-07','2016-08','2016-09','2016-10','2016-11','2016-12' ]
+p5_times = ['2017-01', '2017-02', '2017-03', '2017-04', '2017-05', '2017-06']
+p6_times = ['2017-07', '2017-08', '2017-09', '2017-10', '2017-11', '2017-12']
+p7_times = ['2018-01', '2018-02', '2018-03', '2018-04', '2018-05', '2018-06']
+p8_times = ['2018-07', '2018-08', '2018-09', '2018-10', '2018-11', '2018-12']
