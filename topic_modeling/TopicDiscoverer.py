@@ -2,11 +2,18 @@ import sys, traceback
 import logging as logger
 import warnings
 from util import ml_utils, text_utils, globals, utils
+import sys, os
+sys.path.append("C:/Users/emre2/workspace/CSSforPolitics/TweetAnalyserGit/")
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
+data_path = "F:/tmp/"
 
-def discover():
+############################################################################################
+#note this is the old method. use the lda_topic_discovery.py for topic discovery operations#
+############################################################################################
+
+def discover(file):
     try:
 
         logger.info("Started Topic discovery operations")
@@ -14,8 +21,7 @@ def discover():
 
         # data = df.tweet.values.tolist()
         logger.info("started LDA related operations")
-        filename_read = "F:/tmp/p3_1000.csv"
-        df = utils.read_file(filename_read, ",", names=['ID','datetime','text'])
+        df = utils.read_file(file, "~", names=['ID','datetime','text'])
 
         corpus, id2word, data_words_bigrams = text_utils.prepare_lda_input(df)
         logger.info("building LDA model")
@@ -24,8 +30,8 @@ def discover():
 
         lda_model = ml_utils.build_lda_model(corpus, id2word, expected_topic_cnt)
 
-        ml_utils.evaluate_lda_results(corpus, id2word, data_words_bigrams, lda_model, expected_topic_cnt, filename_read)
-        utils.combine_lda_results_with_lda_output(corpus, lda_model, df, filename_read)
+        ml_utils.evaluate_lda_results(corpus, id2word, data_words_bigrams, lda_model, expected_topic_cnt, file)
+        utils.combine_lda_results_with_lda_output(corpus, lda_model, df, file)
 
     except Exception as ex:
         exc_type, exc_value, exc_traceback = sys.exc_info()
@@ -38,4 +44,8 @@ def discover():
 
 
 if __name__ == "__main__":
-    discover()
+    logger.basicConfig(level=logger.INFO, filename="topic.log", format="%(asctime)s %(message)s")
+    for i in range (3,4):
+        file = data_path + "p" + str(i) + ".csv"
+        discover(file)
+

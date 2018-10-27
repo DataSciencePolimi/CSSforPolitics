@@ -1,3 +1,6 @@
+import sys, os
+sys.path.append("C:/Users/emre2/workspace/CSSforPolitics/TweetAnalyserGit/")
+
 import traceback
 import random
 import logging as logger
@@ -99,3 +102,12 @@ def extract_convert_lda_input(file):
     df = utils.read_file(file, "~", names=['ID', 'datetime', 'text'])
     df_new = utils.preprocess_text_for_topic_discovery(df)
     df_new.to_csv(file+ "_out.csv", index=False)
+
+
+if __name__ == "__main__":
+    if __name__ == "__main__":
+        file = "F:/tmp/test.txt"
+
+        logger.basicConfig(level=logger.INFO, filename="F:/tmp/topic.log", format="%(asctime)s %(message)s")
+        time_period_splitter(file, "~")
+

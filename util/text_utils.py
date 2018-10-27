@@ -32,7 +32,7 @@ import logging as logger
 import traceback
 import spacy
 import gensim
-import util
+from util import ml_utils, globals, utils
 import gensim.corpora as corpora
 
 
@@ -162,9 +162,11 @@ def is_weblink(word):
 def get_stop_words():
     # this method is related with Word2Vec
     # download('stopwords')  # stopwords dictionary, run once
-    stop_words_it = stopwords.words('italian')
     stop_words_en = stopwords.words('english')
-    stop_words_en.extend(stop_words_it)
+    stop_words_en.extend(['from', 'subject', 're', 'edu', 'use', 'do', 'say', 'go', 'not', 's', 'tell', 'be','thing', 'think',
+                       'can', 'could', 'would', 'use', 'have', 'dont', 'make', 'get', 'eu', 'ref', 'uk', 'want', 'us', 'via', 'im', 'says','could','either','lets', 'one', 'tell'])
+    #stop_words_it = stopwords.words('italian')
+    #stop_words_en.extend(stop_words_it)
     return stop_words_en
 
 
@@ -346,9 +348,9 @@ def prepare_lda_input(df, lemmatization_enabled = False):
 
 def preprocess_text_for_topic_discovery(df):
     logger.info("dropping nans")
-    util.drop_nans(df)
-    logger.info("removing unwanted words")
-    util.remove_unwanted_words_from_df(df)
+    utils.drop_nans(df)
+    #logger.info("removing unwanted words")
+    #utils.remove_unwanted_words_from_df(df)
     logger.info("nltk preprocessing")
     preprocess_text(df)
     logger.info("removing word count lower than 2")
@@ -635,7 +637,7 @@ def remove_stopwords(words):
     """Remove stop words from list of tokenized words"""
     new_words = []
     for word in words:
-        if word not in stopwords.words('english'):
+        if word not in stop_words_voc:
             new_words.append(word)
     return new_words
 

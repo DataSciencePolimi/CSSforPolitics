@@ -11,52 +11,6 @@ import math
 ###########that may be used only once or more##############
 ###########################################################
 
-
-def combine_lda_results_with_lda_output(corpus, lda_model, df, filename_read):
-    ids = []
-    datetimes = []
-    topic_ids = []
-    # topic_words = []
-    counter_index = 0
-
-    for bow in corpus:
-        topics = lda_model.get_document_topics(bow)
-        topic_counter = 0
-        max_prob = 0
-        max_prob_topic = None
-        for topic in topics:
-            prob = topic[1]
-            if max_prob < prob:
-                max_prob = prob
-                max_prob_topic = topic
-            else:
-                break
-
-        topic_ids.append(max_prob_topic[0])
-        tweet_id = df.iloc[counter_index]['ID']
-        datetime = df.iloc[counter_index]['datetime']
-        ids.append(tweet_id)
-        datetimes.append(datetime)
-        counter_index += 1
-
-    if len(ids) != len(topic_ids):
-        logger.error("FATAL ERROR caused by data mismatch: len other cols: " + len(ids) + " len new topic cols:" + len(
-            topic_ids))
-        exit(-1)
-
-    newdf = pd.DataFrame(
-        {
-            'ID': ids,
-            'datetime': datetimes,
-            'topic_id': topic_ids
-        })
-    if (df.shape[0] != newdf.shape[0]):
-        logger.info("FATAL ERROR caused by data mismatch: the number of lines are not matching in input and output data collections")
-    else:
-        newdf.to_csv(filename_read + "_topic_out.csv", index=False)
-        logger.info("saved succesfully into a file")
-
-
 def get_random_int(min, max):
     return rnd.randint(min,max)
 
@@ -197,17 +151,18 @@ def write_text_list_to_file(filename_write, texts):
     logger.info("completed writing")
 
 
-def remove_unwanted_words_from_df(df):
-    texts_unwanted_eliminated = []
-    for text in df['text'].values.tolist():
-        text = str(text).rstrip("\r")
-        text = text.lower()
-        new_text = text.replace("#brexit", "")
-        new_text = new_text.replace("#eu", "")
-        new_text = new_text.replace("\\", "")
-
-        texts_unwanted_eliminated.append(new_text)
-    df['text']=pd.Series(texts_unwanted_eliminated)
+#this method has been removed, same functionality will be done by stopwords extension
+#def remove_unwanted_words_from_df(df):
+#    texts_unwanted_eliminated = []
+#    for text in df['text'].values.tolist():
+#        text = str(text).rstrip("\r")
+#        text = text.lower()
+#        new_text = text.replace("#brexit", "")
+#        new_text = new_text.replace("#eu", "")
+#        new_text = new_text.replace("\\", "")
+#
+#        texts_unwanted_eliminated.append(new_text)
+#    df['text']=pd.Series(texts_unwanted_eliminated)
 
 
 def get_mongo_client_db():
@@ -431,6 +386,7 @@ def drop_nans(df):
     logger.info("dropping nans")
     df = df.dropna()
     logger.info(df.shape)
+    return df
 
 
 def extract_hash_tags(text):
