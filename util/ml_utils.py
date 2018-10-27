@@ -25,6 +25,7 @@ import pyLDAvis.gensim  # don't skip this
 import gensim
 from sklearn.utils import shuffle
 from sklearn.model_selection import KFold
+import traceback
 
 if(globals.os=="windows"):
     log_path = "F:/tmp/predictor.log"
@@ -54,48 +55,51 @@ def build_lda_model(corpus, id2word, topic_cnt):
     return lda_model
 
 
-def evaluate_lda_results(corpus, id2word, data_words_bigrams, lda_model, topic_cnt, filename_read, visual_enabled = True):
-    top_topics = lda_model.top_topics(corpus=corpus)
+def evaluate_lda_results(corpus, id2word, texts, lda_model, topic_cnt, filename_read, visual_enabled = True):
+    try:
+        top_topics = lda_model.top_topics(corpus=corpus)
 
-    # Average topic coherence is the sum of topic coherences of all topics, divided by the number of topics.
-    avg_topic_coherence = sum([t[1] for t in top_topics]) / topic_cnt
-    logger.info("Average topic coherence: " + str(avg_topic_coherence))
+        # Average topic coherence is the sum of topic coherences of all topics, divided by the number of topics.
+        avg_topic_coherence = sum([t[1] for t in top_topics]) / topic_cnt
+        logger.info("Average topic coherence: " + str(avg_topic_coherence))
 
-    logger.info("top topics ordered by coherence score")
-    logger.info(str(top_topics))
+        logger.info("top topics ordered by coherence score")
+        logger.info(str(top_topics))
 
-    # Print the Keyword in the 10 topics
-    logger.info("topics: " + str(lda_model.print_topics()))
+        # Print the Keyword in the 10 topics
+        logger.info("topics: " + str(lda_model.print_topics()))
 
-    logger.info("completed operations")
+        logger.info("completed operations. printing topics")
 
-    # Print the Keyword in the 10 topics
-    logger.info(lda_model.print_topics())
-    logger.info("topics: : " + str(lda_model.print_topics()))
+        # Print the Keyword in the 10 topics
+        logger.info(lda_model.print_topics())
+        logger.info("topics: : " + str(lda_model.print_topics()))
 
-    # mallet operations... comment line because takes error in ubuntu
-    # logger.info("ldamallet topics: " + ldamallet.show_topics(formatted=False))
-    # Compute Coherence Score
-    # coherence_model_ldamallet = CoherenceModel(model=ldamallet, texts=texts, dictionary=id2word,coherence='c_v')
-    # coherence_ldamallet = coherence_model_ldamallet.get_coherence()
-    # logger.info('\nldamallet Coherence Score: ', coherence_ldamallet)
+        # mallet operations... comment line because takes error in ubuntu
+        # logger.info("ldamallet topics: " + ldamallet.show_topics(formatted=False))
+        # Compute Coherence Score
+        # coherence_model_ldamallet = CoherenceModel(model=ldamallet, texts=texts, dictionary=id2word,coherence='c_v')
+        # coherence_ldamallet = coherence_model_ldamallet.get_coherence()
+        # logger.info('\nldamallet Coherence Score: ', coherence_ldamallet)
 
-    # Compute Perplexity
-    logger.info("Perplexity: %s", lda_model.log_perplexity(corpus))
+        # Compute Perplexity
+        logger.info("Perplexity: %s", lda_model.log_perplexity(corpus))
 
-    # Compute Coherence Score
-    coherence_model_lda = CoherenceModel(model=lda_model, texts=data_words_bigrams, dictionary=id2word,
-                                         coherence='c_v')
-    coherence_lda = coherence_model_lda.get_coherence()
-    logger.info("Coherence Score: " + str(coherence_lda))
+        # Compute Coherence Score
+        coherence_model_lda = CoherenceModel(model=lda_model, texts=texts, dictionary=id2word,
+                                             coherence='c_v')
+        coherence_lda = coherence_model_lda.get_coherence()
+        logger.info("Coherence Score: " + str(coherence_lda))
 
-    # Visualize the topics
-    # pyLDAvis.enable_notebook()
-    if visual_enabled:
-        vis = pyLDAvis.gensim.prepare(lda_model, corpus, id2word)
-        lda_file = filename_read + "_LDA_Visualization.html"
-        pyLDAvis.save_html(vis, lda_file)
-
+        # Visualize the topics
+        # pyLDAvis.enable_notebook()
+        if visual_enabled:
+            vis = pyLDAvis.gensim.prepare(lda_model, corpus, id2word)
+            lda_file = filename_read + "_LDA_Visualization.html"
+            pyLDAvis.save_html(vis, lda_file)
+    except Exception as ex:
+        logger.error(str(ex))
+        logger.info(traceback.format_exc())
 
 def find_best_parameters(parameters, pipeline, X, y):
     #parameter_searcher = GridSearchCV(pipeline, parameters, cv=5, n_jobs=2, verbose=1)
