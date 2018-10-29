@@ -32,11 +32,11 @@ def topic_discovery():
 
             # Load texts
             filename = data_path + 'p' + str(i) + '.csv'
-            filename = "F:/tmp/test.csv"
+            filename = "F:/tmp/test"
             df = utils.read_file(filename, "~", names=['ID', 'datetime', 'text'])
             texts = df["text"].tolist()
 
-            dictionary, corpus = create_dictionary_corpus(texts)
+            dictionary, corpus, texts = create_dictionary_corpus(texts)
 
             lm = LdaModel(corpus=corpus, id2word=dictionary,
                           num_topics=topic_number,
@@ -74,7 +74,7 @@ def create_dictionary_corpus(texts):
     print('Serializing corpus...')
     # corpora.MmCorpus.serialize(data_path + 'corpus_'+str(i)+'.mm', [dictionary.doc2bow(t) for t in texts])
     corpus = [dictionary.doc2bow(t) for t in texts]
-    return dictionary, corpus
+    return dictionary, corpus, texts
 
 
 def combine_lda_results_with_lda_output(corpus, lda_model, df, file_out):

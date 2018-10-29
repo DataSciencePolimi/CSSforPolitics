@@ -91,15 +91,17 @@ def evaluate_lda_results(corpus, id2word, texts, lda_model, topic_cnt, filename_
         coherence_lda = coherence_model_lda.get_coherence()
         logger.info("Coherence Score: " + str(coherence_lda))
 
-        # Visualize the topics
-        # pyLDAvis.enable_notebook()
-        if visual_enabled:
-            vis = pyLDAvis.gensim.prepare(lda_model, corpus, id2word)
-            lda_file = filename_read + "_LDA_Visualization.html"
-            pyLDAvis.save_html(vis, lda_file)
     except Exception as ex:
         logger.error(str(ex))
         logger.info(traceback.format_exc())
+
+    # Visualize the topics
+    # pyLDAvis.enable_notebook()
+    if visual_enabled:
+        vis = pyLDAvis.gensim.prepare(lda_model, corpus, id2word)
+        lda_file = filename_read + "_LDA_Visualization.html"
+        pyLDAvis.save_html(vis, lda_file)
+
 
 def find_best_parameters(parameters, pipeline, X, y):
     #parameter_searcher = GridSearchCV(pipeline, parameters, cv=5, n_jobs=2, verbose=1)
