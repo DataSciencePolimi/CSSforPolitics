@@ -34,6 +34,8 @@ import spacy
 import gensim
 from util import ml_utils, globals, utils
 import gensim.corpora as corpora
+from nltk import SnowballStemmer
+from nltk.stem.wordnet import WordNetLemmatizer
 
 
 ###########################################################
@@ -41,6 +43,9 @@ import gensim.corpora as corpora
 ###########that may be used only once or more##############
 ###########################################################
 
+stemmer = SnowballStemmer("english")
+lmt = WordNetLemmatizer()
+nltk.download('wordnet')
 
 def untokenize(words):
     """
@@ -104,6 +109,23 @@ def make_bigrams(texts, bigram_mod):
     return [bigram_mod[doc] for doc in texts]
 
 
+def stemmize(words):
+    words = [stemmer.stem(word) for word in words]
+    return words
+
+
+def lemmatize_wordnet(words):
+    words_l = [lmt.lemmatize(word) for word in words]
+    return words_l
+
+
+def remove_empty_elements(words):
+    words = list(filter(lambda x: x.strip() !='', words))
+    words = [word.strip() for word in words]
+
+    words = [word for word in words if len(word)!=0]
+    return words
+
 def make_trigrams(texts, bigram_mod, trigram_mod):
     return [trigram_mod[bigram_mod[doc]] for doc in texts]
 
@@ -163,10 +185,12 @@ def get_stop_words():
     # this method is related with Word2Vec
     # download('stopwords')  # stopwords dictionary, run once
     stop_words_en = stopwords.words('english')
-    stop_words_en.extend(['from', 'subject', 're', 'edu', 'use', 'do', 'say', 'go', 'not', 's', 'tell', 'be','thing', 'think',
-                       'can', 'could', 'would', 'use', 'have', 'dont', 'make', 'get', 'eu', 'ref', 'uk', 'want', 'us', 'via', 'im', 'says','could','either','lets', 'one', 'tell'])
+    #stop_words_en.extend(['from', 'subject', 're', 'edu', 'use', 'do', 'say', 'go', 's', 'tell', 'be','thing', 'think',
+    #                   'can', 'could', 'would', 'use', 'have', 'make', 'get', 'eu', 'ref', 'uk', 'us', 'via', 'im', 'either','lets', 'one', 'tell'])
     #stop_words_it = stopwords.words('italian')
     #stop_words_en.extend(stop_words_it)
+    stop_words_en.remove('in')
+    stop_words_en.remove('out')
     return stop_words_en
 
 
@@ -494,18 +518,24 @@ def get_ml_model(model_id, prob_enabled):
 def normalize_text(tweets):
 
     processed_tweets = []
+    tweets = [tweet.replace("&amp;",'') for tweet in tweets]
     counter = 0
-    for tweet in tweets:
-        counter += 1
-        if(counter%1000 == 0):
-            logger.info(str(counter) + " out of " + str(len(tweets)) + " completed")
-        words = tokenize_tweet(tweet)
-        words = normalize_for_political_stance(words)
-        processed = untokenize(words)
-        processed_tweets.append(processed)
-    logger.info("tokenization steps completed")
-    logger.info("normalizing steps completed")
-
+    tw = ""
+    try:
+        for tweet in tweets:
+            tw = tweet
+            counter += 1
+            if(counter%1000 == 0):
+                logger.info(str(counter) + " out of " + str(len(tweets)) + " completed")
+            words = tokenize_tweet(tweet)
+            words = normalize_for_political_stance(words)
+            processed = untokenize(words)
+            processed_tweets.append(processed)
+        logger.info("tokenization steps completed")
+        logger.info("normalizing steps completed")
+        logger.info("completed normalization for " + str(len(tweets)) + " elements")
+    except Exception as ex:
+        logger.error(str(ex))
     return processed_tweets
 
 
@@ -596,7 +626,7 @@ def remove_punctuation(words):
     """Remove punctuation from list of tokenized words"""
     new_words = []
     for word in words:
-        new_word = re.sub(r'[^\w\s]', '', word)
+        new_word = re.sub(r'[^\w\s]', ' ', word)
         if new_word != '':
             new_words.append(new_word)
     return new_words
@@ -616,13 +646,13 @@ def replace_numbers_with_string(words):
 
 
 def discard_numbers(words):
+
     """Replace all interger occurrences in list of tokenized words with textual representation"""
-    p = inflect.engine()
-    new_words = []
-    for word in words:
-        if not word.isdigit():
-            new_words.append(word)
-    return new_words
+    #words = list(filter(lambda word: not word.isdigit, words))
+    words = [x for x in words if not (x.isdigit()
+                                             or x[0] == '-' and x[1:].isdigit())]
+
+    return words
 
 
 def discard_mentions(words):
@@ -701,6 +731,10 @@ def normalize_for_political_stance(words):
     words = discard_numbers(words)
     words = discard_mentions(words)
     words = remove_stopwords(words)
+    words = stemmize(words)
+    words = remove_empty_elements(words)
+    #words = lemmatize_wordnet(words)
+    words = remove_empty_elements(words)
 
     return words
 

@@ -1,5 +1,5 @@
 import sys, os
-# sys.path.append("/home/ubuntu/users/emre/CSSforPolitics/")
+sys.path.append("/home/brambilla/users/emre/CSSforPolitics/")
 from gensim.models import CoherenceModel, LdaModel
 from gensim import corpora, similarities
 import warnings
@@ -10,8 +10,8 @@ from topic_modeling import preprocess_corpus as preprocessor
 import traceback
 import pandas as pd
 
-# data_path = "/home/ubuntu/users/emre/CSSforPolitics/topic_modeling/data/"
-data_path = "F:/tmp/"
+data_path = "/home/ubuntu/users/emre/CSSforPolitics/topic_modeling/data/"
+#data_path = "F:/tmp/"
 topic_number = 20
 chunksize = 10200
 epochs = 20
@@ -28,11 +28,11 @@ logger.basicConfig(filename=data_path + 'topic.log', format="%(asctime)s:%(level
 def topic_discovery():
     try:
         number_of_files_splitted_periods = 1
-        for i in range(1, number_of_files_splitted_periods + 1):
+        for i in range(1, number_of_files_splitted_periods + 4):
 
             # Load texts
             filename = data_path + 'p' + str(i) + '.csv'
-            filename = "F:/tmp/test"
+            #filename = "F:/tmp/test"
             df = utils.read_file(filename, "~", names=['ID', 'datetime', 'text'])
             texts = df["text"].tolist()
 

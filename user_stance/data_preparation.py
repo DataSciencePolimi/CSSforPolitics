@@ -1,6 +1,8 @@
 import util
 from util import globals
 import logging as logger
+from util import utils
+import pandas as pd
 
 
 def is_tweet_eligible_for_new_enrichment(res):
@@ -180,5 +182,39 @@ def remove_different_stance_of_same_user_in_same_day(file):
         logger.error(str(ex) + " " + line)
 
 
+def enrich_user_id_train_mlma(file):
+    try:
+        df = utils.read_file(file,"~",names=['id'], dtype=object)
+        df["user_id"] = pd.Series([])
+        df["datetime"]= pd.Series([])
+        df["text"]= pd.Series([])
+        db = utils.get_mongo_client_db()
+        try:
+            for index, row in df.iterrows():
+                id = row["id"]
+                id = id.rstrip("\r")
+                id = id.rstrip("\n")
+
+                res = db.tweet.find_one({"ID": str(id)})
+                if not res:
+                    logger.info("this tweet is not existing: " + str(id))
+                    continue;
+                if not 'user_id' in res:
+                    logger.info("this tweet does not have user id: " + str(id))
+                    continue;
+                user_id = res["user_id"]
+                datetime = res["datetime"]
+                datetime = datetime[0:10]
+                text = res["tw_full"]
+                df.loc[index, 'user_id'] = user_id
+                df.loc[index, 'datetime'] = datetime
+                df.loc[index, 'text'] = text
+
+        except Exception as ex:
+            logger.error(str(ex))
+        df.to_csv(file+"_userid.csv","~",index=False,line_terminator="\n")
+    except Exception as ex:
+        logger.error(str(ex))
+
 if __name__ == "__main__":
-    enrich_mongo_with_r1()
+    enrich_user_id_train_mlma("F:/tmp/real_neutrals_300k.csv")

@@ -12,7 +12,7 @@ if __name__ == "__main__":
 
     try:
         # determine which ml classifier to use. they are already pre-defined in ml_utils class. add a new one if not exists.
-        clf = ml_utils.get_model("svm-linear-prob")
+        clf = ml_utils.get_model("svm-linear")
 
         # build the pipeline
         vect = CountVectorizer(ngram_range=(1, 3), analyzer='word', decode_error='replace', encoding='utf-8')
