@@ -22,15 +22,15 @@ class Classifier:
             logger.info("started")
 
             if globals.RUN_MODE == "TRAIN":
-                trained_model_save_enabled = False
+                trained_model_save_enabled = True
 
-                df_train = utils.read_file(globals.INPUT_FILE_NAME_TRAIN_MLMA, "~", ['ID', 'user_id', 'datetime', 'text', 'r1'], dtype={'ID':object, 'user_id':int, 'text':'U','r1':int})
+                df_train = utils.read_file(globals.INPUT_FILE_NAME_TRAIN_MLMA, "~", ['ID', 'user_id', 'datetime', 'text', 'r1'], dtype={'ID':object, 'user_id':object, 'text':'U','r1':int},lineterminator='\r')
 #                df_train["r1"].values.astype('int')
 #                df_train["text"].values.astype('U')
 
-                df_train = df_train[(df_train["r1"]==0) | (df_train["r1"]==1)]
+                #df_train = df_train[(df_train["r1"]==0) | (df_train["r1"]==1) | (df_train["r1"]==2)]
                 logger.info("stance distribution of train dataset: " + str(df_train["r1"].value_counts()))
-                logger.info(df_train.loc[df_train['ID']=='746449445504581632'])
+
                 logger.info(df_train.head())
                 # pre-processing operations
                 utils.drop_nans(df_train)
@@ -50,14 +50,12 @@ class Classifier:
                 # ml_utils.find_best_parameters(globals.GRID_SEARCH_PARAMS_SVM, self.pipeline, df[globals.PROCESSED_TEXT_COLUMN], df[globals.TARGET_COLUMN])
                 ##################
 
-                ###############################
-                ### K-FOLD-PROBABILITY-BASED###
-                ###############################
-
                 #ml_utils.cross_validate(self.pipeline,df_train[globals.PROCESSED_TEXT_COLUMN].tolist(), df_train[globals.TARGET_COLUMN].tolist())
-
-                ml_utils.run_prob_based_train_test_kfold_roc_curve_plot(self.pipeline, df_train[
-                    globals.PROCESSED_TEXT_COLUMN], df_train[globals.TARGET_COLUMN], True, True)
+                #ml_utils.run_and_evaluate_cross_validation(False, False, self.pipeline, df_train[globals.PROCESSED_TEXT_COLUMN], df_train[globals.TARGET_COLUMN], False)
+                #ml_utils.run_and_evaluate_cross_validation(False, False, self.pipeline, df_train[globals.PROCESSED_TEXT_COLUMN], df_train[globals.TARGET_COLUMN])
+                #ml_utils.run_and_evaluate_train_test(False, False, self.pipeline, df_train[globals.PROCESSED_TEXT_COLUMN], df_train[globals.TARGET_COLUMN])
+                #ml_utils.run_prob_based_train_test_kfold_roc_curve_plot(self.pipeline, df_train[
+                 #   globals.PROCESSED_TEXT_COLUMN], df_train[globals.TARGET_COLUMN], True, True)
                 ###############################
 
                 ###############################
@@ -68,7 +66,7 @@ class Classifier:
                 ###########################################
                 ### TRAIN-TEST-SPLIT-PROBABILITY-BASED#####
                 ###########################################
-                # ml_utils.run_prob_based_train_test_roc_curve_plot(True, False, self.pipeline, df_train[globals.PROCESSED_TEXT_COLUMN], df_train[globals.TARGET_COLUMN], False)
+                ml_utils.run_prob_based_train_test_roc_curve_plot(False, False, self.pipeline, df_train[globals.PROCESSED_TEXT_COLUMN], df_train[globals.TARGET_COLUMN], True)
 
                 ###############################
                 ### CROSS-VALIDATION-BASED#####
@@ -124,6 +122,18 @@ class Classifier:
                 logger.info("complete.")
 
             elif globals.RUN_MODE == "PREDICT_UNLABELED_DATA":
+
+                df_train = utils.read_file(globals.INPUT_FILE_NAME_TRAIN_MLMA, "~", ['ID', 'user_id', 'datetime', 'text', 'r1'], dtype={'ID':object, 'user_id':object, 'text':'U','r1':int},lineterminator='\r')
+                df_unlabeled = utils.read_file(globals.INPUT_FILE_NAME_DISCOVER_PREDICT_NEUTRALS, "~", ['ID', 'user_id', 'datetime', 'text','old_r1'], dtype={'ID':object, 'user_id':object, 'text':'U','old_r1':int},lineterminator='\r')
+
+                logger.info(df_train.head())
+                # pre-processing operations
+
+                text_utils.preprocess_text(df_train)
+                text_utils.preprocess_text(df_unlabeled)
+
+                df_pred = ml_utils.predict_unlabeled_data(False, self.pipeline, df_train[globals.PROCESSED_TEXT_COLUMN], df_train[globals.TARGET_COLUMN], df_unlabeled[globals.PROCESSED_TEXT_COLUMN], False)
+
                 if self.pipeline is None:
                     with open(globals.FILE_STORE_MODEL, 'rb') as file:
                         self.pipeline = pickle.load(file)

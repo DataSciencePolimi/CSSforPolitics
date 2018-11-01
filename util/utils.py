@@ -171,13 +171,13 @@ def get_mongo_client_db():
     return db
 
 
-def read_file(filename, delimiter=None, names=None, dtype=None, lineterminator='\n', ):
+def read_file(filename, delimiter=None, names=None, dtype=None, lineterminator='\n'):
     if dtype is None:
         df = pd.read_csv(filename, delimiter=delimiter, encoding="ISO-8859-1", error_bad_lines=False,
-                         names=names, lineterminator=lineterminator)
+                         names=names, lineterminator=lineterminator, index_col=False)
     else:
         df = pd.read_csv(filename, delimiter=delimiter, encoding="ISO-8859-1", error_bad_lines=False,
-                     names=names,lineterminator=lineterminator, dtype=dtype)
+                     names=names,lineterminator=lineterminator, dtype=dtype, index_col=False)
     return df
 
 
@@ -295,6 +295,7 @@ def keywithmaxval(d):
     k = list(d.keys())
     return k[v.index(max(v))]
 
+
 def find_label_of_tweet(hashtags):
     label = -1
     has_leave_hashtag = False
@@ -389,8 +390,8 @@ def drop_nans(df):
     return df
 
 
-def extract_hash_tags(text):
-    ss = [part[1:] for part in text.split() if part.startswith('#')]
+def extract_hash_tags(words):
+    ss = [part[1:] for part in words if part.startswith('#')]
     return ss
 
 

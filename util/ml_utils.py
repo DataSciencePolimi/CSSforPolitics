@@ -26,6 +26,11 @@ import gensim
 from sklearn.utils import shuffle
 from sklearn.model_selection import KFold
 import traceback
+import numpy as np
+
+from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.feature_extraction.text import TfidfTransformer
+
 
 if(globals.os=="windows"):
     log_path = "F:/tmp/predictor.log"
@@ -204,9 +209,9 @@ def run_and_evaluate_cross_validation(is_binary_classification, is_scaling_enabl
     if is_scaling_enabled:
         X = scale_X(X)
     X, y = shuffle(X, y)
-    cross_val_scores = cross_val_score(classifier, X, y, cv=10)
-    logger.info(str(cross_val_scores))
-    logger.info("cross val score: " + str(cross_val_scores.mean()))
+    #cross_val_scores = cross_val_score(classifier, X, y, cv=10)
+    #logger.info(str(cross_val_scores))
+    #logger.info("cross val score: " + str(cross_val_scores.mean()))
     y_pred = cross_val_predict(classifier, X, y, cv=10)
     print_false_predicted_entries(X, y_pred, y)
     logger.info(metrics.classification_report(y, y_pred, target_names=None))
@@ -248,6 +253,7 @@ def cross_validate(model, x, y, folds=10, repeats=5):
 
     except Exception as ex:
         logger.error(str(ex))
+
 
 def R2(ypred, ytrue):
     y_avg = np.mean(ytrue)
@@ -348,6 +354,9 @@ def run_and_evaluate_train_test(is_binary_classification, is_scaling_enabled, cl
 
     logger.info(pd.Series(y_test).value_counts())
     y_pred = classifier.predict(X_test)
+    y_test = y_test.values
+    print(type(y_test))
+    print(type(y_pred))
     logger.info("expected test results  :" + str(y_test))
     logger.info("predicted test results: " + str(y_pred))
     logger.info("accuracy score:" + str(accuracy_score(y_test, y_pred)))
@@ -407,9 +416,17 @@ def tryy():
 
 def multiclass_roc(X_train, X_test, y_train, y_test, n_classes):
     # tryy()
+    #X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, shuffle=True)
+    #classifier = OneVsRestClassifier(svm.SVC(kernel='linear', probability=True,
+    #                                         random_state=False))
     classifier = OneVsRestClassifier(svm.SVC(kernel='linear', probability=True,
                                              random_state=False))
-    y_score = classifier.fit(X_train, y_train).decision_function(X_test)
+    # build the pipeline
+    vect = CountVectorizer(ngram_range=(1, 3), analyzer='word', decode_error='replace', encoding='utf-8')
+    tfidf = TfidfTransformer()
+    pipeline = get_pipeline("single", vect, tfidf, classifier)
+
+    y_score = pipeline.fit(X_train, y_train).decision_function(X_test)
 
     # Compute ROC curve and ROC area for each class
     fpr = dict()
@@ -419,13 +436,26 @@ def multiclass_roc(X_train, X_test, y_train, y_test, n_classes):
         fpr[i], tpr[i], _ = roc_curve(y_test[:, i], y_score[:, i])
         roc_auc[i] = auc(fpr[i], tpr[i])
 
-    # Compute micro-average ROC curve and ROC area
-    fpr["micro"], tpr["micro"], _ = roc_curve(y_test.ravel(), y_score.ravel())
-    roc_auc["micro"] = auc(fpr["micro"], tpr["micro"])
+    # Plot of a ROC curve for a specific class
+    for i in range(n_classes):
+        plt.figure()
+        plt.plot(fpr[i], tpr[i], label='ROC curve (area = %0.2f)' % roc_auc[i])
+        plt.plot([0, 1], [0, 1], 'k--')
+        plt.xlim([0.0, 1.0])
+        plt.ylim([0.0, 1.05])
+        plt.xlabel('False Positive Rate')
+        plt.ylabel('True Positive Rate')
+        plt.title('Receiver operating characteristic example')
+        plt.legend(loc="lower right")
+        plt.show()
 
-    draw_plt(0, fpr, tpr, roc_auc)
-    draw_plt(1, fpr, tpr, roc_auc)
-    draw_plt(2, fpr, tpr, roc_auc)
+    # Compute micro-average ROC curve and ROC area
+    #fpr["micro"], tpr["micro"], _ = roc_curve(y_test.ravel(), y_score.ravel())
+    #roc_auc["micro"] = auc(fpr["micro"], tpr["micro"])
+#
+    #draw_plt(0, fpr, tpr, roc_auc)
+    #draw_plt(1, fpr, tpr, roc_auc)
+#    #draw_plt(2, fpr, tpr, roc_auc)
 
 
 def draw_plt(lw, fpr, tpr, roc_auc):
@@ -442,18 +472,39 @@ def draw_plt(lw, fpr, tpr, roc_auc):
     plt.show()
 
 
-def print_false_predicted_entries(inputs, predictions_prob, labels, is_prob_pred = False):
+def print_false_predicted_entries(inputs, predictions, labels, is_prob_pred = False):
 
     if is_prob_pred:
-        predictions = [0 if x < 0.5 else 1 for x in predictions_prob]
+        predictions = [0 if x < 0.5 else 1 for x in predictions]
 
     counter_false_prediction = 0
     for input, prediction, label in zip(inputs, predictions, labels):
-        if prediction != label[0]:
+        if prediction != label:
             counter_false_prediction += 1
             logger.info("### " + input + ' ### has been classified as ' + str(prediction) + ' and should be '+ str(label))
     logger.info("total final test size: " + str(len(predictions)))
     logger.info("false predicted records size: " + str(counter_false_prediction))
+
+
+def discard_low_pred_prob_prediction_couple_2(X_test, X_pred, y_test, y_pred, min_discard_prob, max_discard_prob):
+    y_test_new = []
+    y_pred_new = []
+    X_test_new = []
+    X_pred_new = []
+    counter_discarded = 0
+    logger.info("total size of original entries: " + str(len(y_pred)))
+
+    for i in range(0, len(y_pred)):
+        if y_pred[i] > min_discard_prob and y_pred[i] < max_discard_prob:
+            logger.debug(str(i) + "th record pred prob: " + str(y_pred[i]) + ". It'll be discarded from evaluation part")
+            counter_discarded += 1
+            continue;
+        y_pred_new.append(y_pred[i])
+        y_test_new.append(y_test[i])
+        X_test_new.append(X_test[i])
+        X_pred_new.append(X_pred[i])
+    logger.info("total size of discarded entries having low probability predictions scores: " + str(counter_discarded))
+    return X_test, X_pred, y_test, y_pred
 
 
 def discard_low_pred_prob_prediction_couple(y_test, y_pred, min_discard_prob, max_discard_prob):
@@ -474,43 +525,64 @@ def discard_low_pred_prob_prediction_couple(y_test, y_pred, min_discard_prob, ma
     return y_test_new, y_pred_new
 
 
-def run_prob_based_train_test_roc_curve_plot(is_binary_classification, is_scaling_enabled, classifier, X, y, remove_low_pred=False):
-    y = label_binarize(y, classes=[0, 1])
-
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, shuffle=True)
-    if is_scaling_enabled:
-        X_train, X_test = scale_train_test(X_train, X_test)
-
+def predict_unlabeled_data(is_binary_classification, classifier, X, y, X_unlabeled, remove_low_pred=False):
     if not is_binary_classification:
-        multiclass_roc(X_train, X_test, y_train, y_test, 3)
-    else:
-        classifier.fit(X_train, y_train)
-        if is_binary_classification:
-            logger.info("Natural TP rate=" + str(sum(y_test) / len(y_test)))
-        y_pred_pair = classifier.predict_proba(X_test)
-        y_pred = y_pred_pair[:, 1]
-
-        # logger.info('Top 100 first' + str(len(y_test)) + ' records in test dataset) -> ' + str(
-        #    ratio(y_test, y_pred_prob, 1)))
-
-        logger.info("test ended")
-        logger.info('ROC AUC:', roc_auc_score(y_test, y_pred))
-        # for i in [x * 0.1 for x in range(1, 6)]:
-        #    i = round(i, 1)
-        #    logger.info('Top' + str(int(i * 100)) + 'percentile = (first ' + str(
-        #        int(i * len(y_test))) + ' records in test dataset) -> ' + str(
-        #        ratio(y_test, y_pred_prob, pct=i)))
-
-        is_roc_plot_enabled = True
-        if is_roc_plot_enabled:
-            plot_roc(y_test, y_pred)
+        classifier.fit(X, y)
+        y_unlabeled_pair = classifier.predict_proba(X_unlabeled)
+        y_unlabeled = y_unlabeled_pair[:, 1]
+        y_list = np.column_stack(X_unlabeled, y_unlabeled)
+        df = pd.DataFrame.from_records(y_list, columns=['x', 'y'])
+        print("good")
 
         if remove_low_pred:
-            y_test, y_pred = discard_low_pred_prob_prediction_couple(y_test, y_pred)
+            y_test, y_pred = discard_low_pred_prob_prediction_couple(X_unlabeled, y_unlabeled)
+        return df
 
-        new_list = [0 if x<0.5 else 1 for x in y_pred]
-        print_false_predicted_entries(X_test, y_pred, y_test, True)
-        print_evaluation_stats(y_test, y_pred, True)
+def run_prob_based_train_test_roc_curve_plot(is_binary_classification, is_scaling_enabled, classifier, X, y, remove_low_pred=False):
+    try:
+        if not is_binary_classification:
+            y = label_binarize(y, classes=[0, 1, 2])
+            X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.1, shuffle=True)
+            multiclass_roc(X_train, X_test, y_train, y_test, 3)
+
+        else:
+            y = label_binarize(y, classes=[0, 1])
+            X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, shuffle=True)
+            classifier.fit(X_train, y_train)
+
+            if is_scaling_enabled:
+                X_train, X_test = scale_train_test(X_train, X_test)
+
+            else:
+                classifier.fit(X_train, y_train)
+                if is_binary_classification:
+                    logger.info("Natural TP rate=" + str(sum(y_test) / len(y_test)))
+                y_pred_pair = classifier.predict_proba(X_test)
+                y_pred = y_pred_pair[:, 1]
+
+                # logger.info('Top 100 first' + str(len(y_test)) + ' records in test dataset) -> ' + str(
+                #    ratio(y_test, y_pred_prob, 1)))
+
+                logger.info("test ended")
+                logger.info('ROC AUC:', roc_auc_score(y_test, y_pred))
+                # for i in [x * 0.1 for x in range(1, 6)]:
+                #    i = round(i, 1)
+                #    logger.info('Top' + str(int(i * 100)) + 'percentile = (first ' + str(
+                #        int(i * len(y_test))) + ' records in test dataset) -> ' + str(
+                #        ratio(y_test, y_pred_prob, pct=i)))
+
+                is_roc_plot_enabled = True
+                if is_roc_plot_enabled:
+                    plot_roc(y_test, y_pred)
+
+                if remove_low_pred:
+                    y_test, y_pred = discard_low_pred_prob_prediction_couple(y_test, y_pred)
+
+                new_list = [0 if x<0.5 else 1 for x in y_pred]
+                print_false_predicted_entries(X_test, y_pred, y_test, True)
+                print_evaluation_stats(y_test, y_pred, True)
+    except Exception as ex:
+        logger.error(str(ex))
 
 
 def svc_param_selection(X, y, nfolds):
