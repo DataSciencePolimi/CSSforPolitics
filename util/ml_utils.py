@@ -25,19 +25,10 @@ import pyLDAvis.gensim  # don't skip this
 import gensim
 from sklearn.utils import shuffle
 from sklearn.model_selection import KFold
-import traceback
-import numpy as np
+import keras
+import pickle
 
-from sklearn.feature_extraction.text import CountVectorizer
-from sklearn.feature_extraction.text import TfidfTransformer
-
-
-if(globals.os=="windows"):
-    log_path = "F:/tmp/predictor.log"
-else:
-    log_path = "predictor.log"
-
-logger.basicConfig(level=logger.INFO, filename=log_path, format="%(asctime)s %(message)s")
+logger.basicConfig(level=logger.INFO, filename="/Users/emrecalisir/git/brexit/CSSforPolitics/logs/predictor.log", format="%(asctime)s %(message)s")
 
 
 
@@ -45,6 +36,43 @@ logger.basicConfig(level=logger.INFO, filename=log_path, format="%(asctime)s %(m
 #######In this file, there are only the ml methods ########
 ###########that may be used only once or more##############
 ###########################################################
+
+
+def predict_with_multiple_classifiers(classifier, df_unlabeled, model_remain, model_leave):
+    try:
+        logger.info("started to prediction")
+        records = df_unlabeled[globals.PROCESSED_TEXT_COLUMN].tolist()
+        y_preds_remain= model_remain.predict_proba(records)[:, 1]
+        y_preds_leave = model_leave.predict_proba(records)[:, 1]
+        df_unlabeled["y_preds_remain"] = pd.Series(y_preds_remain)
+        df_unlabeled["y_preds_leave"] = pd.Series(y_preds_leave)
+        print("ok")
+    except Exception as ex:
+        logger.error(str(ex))
+
+    return df_unlabeled
+
+
+def predict_unlabeled_data(is_binary_classification, classifier, df_train, df_unlabeled, remove_low_pred=False, prob_enabled=False):
+    try:
+        logger.info("started to prediction")
+
+        if not is_binary_classification:
+            classifier.fit(df_train[globals.PROCESSED_TEXT_COLUMN].tolist(), df_train[globals.TARGET_COLUMN].tolist())
+            if prob_enabled:
+                y_unlabeled_pair = classifier.predict_proba(df_unlabeled[globals.PROCESSED_TEXT_COLUMN].tolist())
+                y_unlabeled = y_unlabeled_pair[:, 1]
+            else:
+                y_unlabeled = classifier.predict(df_unlabeled[globals.PROCESSED_TEXT_COLUMN].tolist())
+
+            df_unlabeled["pred"]=pd.Series(y_unlabeled)
+            logger.info("completed prediction. ")
+            logger.info(df_unlabeled["pred"].value_counts())
+            return df_unlabeled
+            #if remove_low_pred:
+            #    y_test, y_pred = discard_low_pred_prob_prediction_couple(x_unlabeled, y_unlabeled)
+    except Exception as ex:
+        logger.error(str(ex))
 
 
 def build_lda_model(corpus, id2word, topic_cnt):
@@ -61,44 +89,39 @@ def build_lda_model(corpus, id2word, topic_cnt):
 
 
 def evaluate_lda_results(corpus, id2word, texts, lda_model, topic_cnt, filename_read, visual_enabled = True):
-    try:
-        top_topics = lda_model.top_topics(corpus=corpus)
+    top_topics = lda_model.top_topics(corpus=corpus)
 
-        # Average topic coherence is the sum of topic coherences of all topics, divided by the number of topics.
-        avg_topic_coherence = sum([t[1] for t in top_topics]) / topic_cnt
-        logger.info("Average topic coherence: " + str(avg_topic_coherence))
+    # Average topic coherence is the sum of topic coherences of all topics, divided by the number of topics.
+    avg_topic_coherence = sum([t[1] for t in top_topics]) / topic_cnt
+    logger.info("Average topic coherence: " + str(avg_topic_coherence))
 
-        logger.info("top topics ordered by coherence score")
-        logger.info(str(top_topics))
+    logger.info("top topics ordered by coherence score")
+    logger.info(str(top_topics))
 
-        # Print the Keyword in the 10 topics
-        logger.info("topics: " + str(lda_model.print_topics()))
+    # Print the Keyword in the 10 topics
+    logger.info("topics: " + str(lda_model.print_topics()))
 
-        logger.info("completed operations. printing topics")
+    logger.info("completed operations")
 
-        # Print the Keyword in the 10 topics
-        logger.info(lda_model.print_topics())
-        logger.info("topics: : " + str(lda_model.print_topics()))
+    # Print the Keyword in the 10 topics
+    logger.info(lda_model.print_topics())
+    logger.info("topics: : " + str(lda_model.print_topics()))
 
-        # mallet operations... comment line because takes error in ubuntu
-        # logger.info("ldamallet topics: " + ldamallet.show_topics(formatted=False))
-        # Compute Coherence Score
-        # coherence_model_ldamallet = CoherenceModel(model=ldamallet, texts=texts, dictionary=id2word,coherence='c_v')
-        # coherence_ldamallet = coherence_model_ldamallet.get_coherence()
-        # logger.info('\nldamallet Coherence Score: ', coherence_ldamallet)
+    # mallet operations... comment line because takes error in ubuntu
+    # logger.info("ldamallet topics: " + ldamallet.show_topics(formatted=False))
+    # Compute Coherence Score
+    # coherence_model_ldamallet = CoherenceModel(model=ldamallet, texts=texts, dictionary=id2word,coherence='c_v')
+    # coherence_ldamallet = coherence_model_ldamallet.get_coherence()
+    # logger.info('\nldamallet Coherence Score: ', coherence_ldamallet)
 
-        # Compute Perplexity
-        logger.info("Perplexity: %s", lda_model.log_perplexity(corpus))
+    # Compute Perplexity
+    logger.info("Perplexity: %s", lda_model.log_perplexity(corpus))
 
-        # Compute Coherence Score
-        coherence_model_lda = CoherenceModel(model=lda_model, texts=texts, dictionary=id2word,
-                                             coherence='c_v')
-        coherence_lda = coherence_model_lda.get_coherence()
-        logger.info("Coherence Score: " + str(coherence_lda))
-
-    except Exception as ex:
-        logger.error(str(ex))
-        logger.info(traceback.format_exc())
+    # Compute Coherence Score
+    coherence_model_lda = CoherenceModel(model=lda_model, texts=texts, dictionary=id2word,
+                                         coherence='c_v')
+    coherence_lda = coherence_model_lda.get_coherence()
+    logger.info("Coherence Score: " + str(coherence_lda))
 
     # Visualize the topics
     # pyLDAvis.enable_notebook()
@@ -209,11 +232,11 @@ def run_and_evaluate_cross_validation(is_binary_classification, is_scaling_enabl
     if is_scaling_enabled:
         X = scale_X(X)
     X, y = shuffle(X, y)
-    #cross_val_scores = cross_val_score(classifier, X, y, cv=10)
-    #logger.info(str(cross_val_scores))
-    #logger.info("cross val score: " + str(cross_val_scores.mean()))
+    cross_val_scores = cross_val_score(classifier, X, y, cv=10)
+    logger.info(str(cross_val_scores))
+    logger.info("cross val score: " + str(cross_val_scores.mean()))
     y_pred = cross_val_predict(classifier, X, y, cv=10)
-    print_false_predicted_entries(X, y_pred, y)
+    #print_false_predicted_entries(X, y_pred, y)
     logger.info(metrics.classification_report(y, y_pred, target_names=None))
     print_confusion_matrix(is_binary_classification, y, y_pred)
     print_evaluation_stats(y, y_pred,False)
@@ -254,7 +277,6 @@ def cross_validate(model, x, y, folds=10, repeats=5):
     except Exception as ex:
         logger.error(str(ex))
 
-
 def R2(ypred, ytrue):
     y_avg = np.mean(ytrue)
     SS_tot = np.sum((ytrue - y_avg)**2)
@@ -263,32 +285,51 @@ def R2(ypred, ytrue):
     return r2
 
 
-def run_prob_based_train_test_kfold_roc_curve_plot(classifier, x, y, is_plot_enabled=True, discard_low_pred=False):
-    min_discard_prob=0.2
-    max_discard_prob=0.8
+def save_model(model, filename):
+    pickle.dump(model, open(filename, 'wb'))
+
+
+def restore_model(filename):
+    loaded_model = pickle.load(open(filename, 'rb'))
+    return loaded_model
+
+
+def run_prob_based_train_test_kfold_roc_curve_plot(classifier, tweet_ids, x, y, is_plot_enabled=True, discard_low_pred=False):
+    min_discard_prob=0.3
+    max_discard_prob=0.7
     n_splits = 10
+    #y = keras.utils.to_categorical(y, 3)
     y = label_binarize(y, classes=[0, 1])
     x, y = shuffle(x, y)
     cv = StratifiedKFold(n_splits=n_splits)
     tprs = []
     aucs = []
     mean_fpr = np.linspace(0, 1, 100)
-    y = label_binarize(y, classes=[0, 1])
+    #y = label_binarize(y, classes=[0, 1])
     i = 0
     logger.info("###" + str(n_splits) + "-fold started ###")
     cum_f1_score = 0
     try:
         cnt = 0
-
+        counter_discarded_sum = 0
+        counter_sum = 0
+        logger.info("size of x: " + str(len(x)))
+        list_tweet_ids = []
         for train, test in cv.split(x, y):
 
             logger.info("## fold: " + str(i+1) + "started")
+
             x = np.array(x)
             y = np.array(y)
+            tweet_ids_np = np.array(tweet_ids)
             X_train = x[train]
             y_train = y[train]
             X_test = x[test]
             y_test = y[test]
+
+            tweet_ids_np_train = tweet_ids_np[train]
+            tweet_ids_np_test = tweet_ids_np[test]
+
 
             classifier.fit(X_train, y_train)
             probas_ = classifier.predict_proba(X_test)
@@ -297,10 +338,23 @@ def run_prob_based_train_test_kfold_roc_curve_plot(classifier, x, y, is_plot_ena
             # Compute ROC curve and area the curve
             y_pred = probas_[:, 1]
             if discard_low_pred:
-                y_test, y_pred = discard_low_pred_prob_prediction_couple(y_test, y_pred,min_discard_prob, max_discard_prob)
-            print_false_predicted_entries(X_test, y_pred, y_test, True)
+                counter_sum += len(y_test)
+                y_test, y_pred, counter_discarded = discard_low_pred_prob_prediction_couple(y_test, y_pred, min_discard_prob, max_discard_prob)
+                counter_discarded_sum += counter_discarded
+            #print_false_predicted_entries(X_test, y_pred, y_test, True)
             cum_f1_score += print_evaluation_stats(y_test, y_pred, True)
-
+            if discard_low_pred:
+                y_pred_nd = np.asarray(y_pred)
+                indices_of_pred, = np.where(y_pred_nd > 0.5)
+            else:
+                indices_of_pred, = np.where(y_pred > 0.5)
+            print(type(indices_of_pred))
+            indices_of_pred_list = indices_of_pred.tolist()
+            tweet_ids_list = tweet_ids.tolist()
+            tw_ids_stance = np.take(tweet_ids_list, indices_of_pred_list)
+            tw_ids_stance_list = tw_ids_stance.tolist()
+            for tw_id in tw_ids_stance_list:
+                list_tweet_ids.append(tw_id)
             fpr, tpr, thresholds = roc_curve(y_test, y_pred)
             tprs.append(interp(mean_fpr, fpr, tpr))
             tprs[-1][0] = 0.0
@@ -313,6 +367,15 @@ def run_prob_based_train_test_kfold_roc_curve_plot(classifier, x, y, is_plot_ena
             i += 1
             logger.info("## fold: " + str(i+1) + "completed")
 
+        with open('/Users/emrecalisir/git/brexit/CSSforPolitics/tweets_stance.txt', 'w') as f:
+            for item in list_tweet_ids:
+                f.write("%s\n" % item)
+        from datetime import date
+        today = date.today()
+
+        save_model(classifier, "/Users/emrecalisir/git/brexit/CSSforPolitics/models/LeaveClassifier_"+str(today))
+
+        logger.info("Discarded: " + str(counter_discarded_sum) + " out of " + str(counter_sum) + " records")
         logger.info("Average weighted F1-score: " + str(cum_f1_score/n_splits))
         mean_tpr = np.mean(tprs, axis=0)
         mean_tpr[-1] = 1.0
@@ -354,9 +417,6 @@ def run_and_evaluate_train_test(is_binary_classification, is_scaling_enabled, cl
 
     logger.info(pd.Series(y_test).value_counts())
     y_pred = classifier.predict(X_test)
-    y_test = y_test.values
-    print(type(y_test))
-    print(type(y_pred))
     logger.info("expected test results  :" + str(y_test))
     logger.info("predicted test results: " + str(y_pred))
     logger.info("accuracy score:" + str(accuracy_score(y_test, y_pred)))
@@ -416,17 +476,9 @@ def tryy():
 
 def multiclass_roc(X_train, X_test, y_train, y_test, n_classes):
     # tryy()
-    #X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, shuffle=True)
-    #classifier = OneVsRestClassifier(svm.SVC(kernel='linear', probability=True,
-    #                                         random_state=False))
     classifier = OneVsRestClassifier(svm.SVC(kernel='linear', probability=True,
                                              random_state=False))
-    # build the pipeline
-    vect = CountVectorizer(ngram_range=(1, 3), analyzer='word', decode_error='replace', encoding='utf-8')
-    tfidf = TfidfTransformer()
-    pipeline = get_pipeline("single", vect, tfidf, classifier)
-
-    y_score = pipeline.fit(X_train, y_train).decision_function(X_test)
+    y_score = classifier.fit(X_train, y_train).decision_function(X_test)
 
     # Compute ROC curve and ROC area for each class
     fpr = dict()
@@ -436,26 +488,13 @@ def multiclass_roc(X_train, X_test, y_train, y_test, n_classes):
         fpr[i], tpr[i], _ = roc_curve(y_test[:, i], y_score[:, i])
         roc_auc[i] = auc(fpr[i], tpr[i])
 
-    # Plot of a ROC curve for a specific class
-    for i in range(n_classes):
-        plt.figure()
-        plt.plot(fpr[i], tpr[i], label='ROC curve (area = %0.2f)' % roc_auc[i])
-        plt.plot([0, 1], [0, 1], 'k--')
-        plt.xlim([0.0, 1.0])
-        plt.ylim([0.0, 1.05])
-        plt.xlabel('False Positive Rate')
-        plt.ylabel('True Positive Rate')
-        plt.title('Receiver operating characteristic example')
-        plt.legend(loc="lower right")
-        plt.show()
-
     # Compute micro-average ROC curve and ROC area
-    #fpr["micro"], tpr["micro"], _ = roc_curve(y_test.ravel(), y_score.ravel())
-    #roc_auc["micro"] = auc(fpr["micro"], tpr["micro"])
-#
-    #draw_plt(0, fpr, tpr, roc_auc)
-    #draw_plt(1, fpr, tpr, roc_auc)
-#    #draw_plt(2, fpr, tpr, roc_auc)
+    fpr["micro"], tpr["micro"], _ = roc_curve(y_test.ravel(), y_score.ravel())
+    roc_auc["micro"] = auc(fpr["micro"], tpr["micro"])
+
+    draw_plt(0, fpr, tpr, roc_auc)
+    draw_plt(1, fpr, tpr, roc_auc)
+    draw_plt(2, fpr, tpr, roc_auc)
 
 
 def draw_plt(lw, fpr, tpr, roc_auc):
@@ -472,11 +511,12 @@ def draw_plt(lw, fpr, tpr, roc_auc):
     plt.show()
 
 
-def print_false_predicted_entries(inputs, predictions, labels, is_prob_pred = False):
+def print_false_predicted_entries(inputs, predictions_prob, labels, is_prob_pred = False):
 
     if is_prob_pred:
-        predictions = [0 if x < 0.5 else 1 for x in predictions]
-
+        predictions = [0 if x < 0.5 else 1 for x in predictions_prob]
+    else:
+        predictions = predictions_prob
     counter_false_prediction = 0
     for input, prediction, label in zip(inputs, predictions, labels):
         if prediction != label:
@@ -486,25 +526,23 @@ def print_false_predicted_entries(inputs, predictions, labels, is_prob_pred = Fa
     logger.info("false predicted records size: " + str(counter_false_prediction))
 
 
-def discard_low_pred_prob_prediction_couple_2(X_test, X_pred, y_test, y_pred, min_discard_prob, max_discard_prob):
+def discard_low_pred_prob_prediction_class_1(y_test, y_pred, max_discard_prob):
     y_test_new = []
     y_pred_new = []
-    X_test_new = []
-    X_pred_new = []
     counter_discarded = 0
     logger.info("total size of original entries: " + str(len(y_pred)))
-
     for i in range(0, len(y_pred)):
-        if y_pred[i] > min_discard_prob and y_pred[i] < max_discard_prob:
+        pred_confidence = y_pred[i]
+
+        if pred_confidence < max_discard_prob:
             logger.debug(str(i) + "th record pred prob: " + str(y_pred[i]) + ". It'll be discarded from evaluation part")
             counter_discarded += 1
             continue;
         y_pred_new.append(y_pred[i])
         y_test_new.append(y_test[i])
-        X_test_new.append(X_test[i])
-        X_pred_new.append(X_pred[i])
     logger.info("total size of discarded entries having low probability predictions scores: " + str(counter_discarded))
-    return X_test, X_pred, y_test, y_pred
+
+    return y_test_new, y_pred_new
 
 
 def discard_low_pred_prob_prediction_couple(y_test, y_pred, min_discard_prob, max_discard_prob):
@@ -522,67 +560,46 @@ def discard_low_pred_prob_prediction_couple(y_test, y_pred, min_discard_prob, ma
         y_test_new.append(y_test[i])
     logger.info("total size of discarded entries having low probability predictions scores: " + str(counter_discarded))
 
-    return y_test_new, y_pred_new
+    return y_test_new, y_pred_new, counter_discarded
 
-
-def predict_unlabeled_data(is_binary_classification, classifier, X, y, X_unlabeled, remove_low_pred=False):
-    if not is_binary_classification:
-        classifier.fit(X, y)
-        y_unlabeled_pair = classifier.predict_proba(X_unlabeled)
-        y_unlabeled = y_unlabeled_pair[:, 1]
-        y_list = np.column_stack(X_unlabeled, y_unlabeled)
-        df = pd.DataFrame.from_records(y_list, columns=['x', 'y'])
-        print("good")
-
-        if remove_low_pred:
-            y_test, y_pred = discard_low_pred_prob_prediction_couple(X_unlabeled, y_unlabeled)
-        return df
 
 def run_prob_based_train_test_roc_curve_plot(is_binary_classification, is_scaling_enabled, classifier, X, y, remove_low_pred=False):
-    try:
-        if not is_binary_classification:
-            y = label_binarize(y, classes=[0, 1, 2])
-            X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.1, shuffle=True)
-            multiclass_roc(X_train, X_test, y_train, y_test, 3)
+    y = label_binarize(y, classes=[0, 1])
 
-        else:
-            y = label_binarize(y, classes=[0, 1])
-            X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, shuffle=True)
-            classifier.fit(X_train, y_train)
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, shuffle=True)
+    if is_scaling_enabled:
+        X_train, X_test = scale_train_test(X_train, X_test)
 
-            if is_scaling_enabled:
-                X_train, X_test = scale_train_test(X_train, X_test)
+    if not is_binary_classification:
+        multiclass_roc(X_train, X_test, y_train, y_test, 3)
+    else:
+        classifier.fit(X_train, y_train)
+        if is_binary_classification:
+            logger.info("Natural TP rate=" + str(sum(y_test) / len(y_test)))
+        y_pred_pair = classifier.predict_proba(X_test)
+        y_pred = y_pred_pair[:, 1]
 
-            else:
-                classifier.fit(X_train, y_train)
-                if is_binary_classification:
-                    logger.info("Natural TP rate=" + str(sum(y_test) / len(y_test)))
-                y_pred_pair = classifier.predict_proba(X_test)
-                y_pred = y_pred_pair[:, 1]
+        # logger.info('Top 100 first' + str(len(y_test)) + ' records in test dataset) -> ' + str(
+        #    ratio(y_test, y_pred_prob, 1)))
 
-                # logger.info('Top 100 first' + str(len(y_test)) + ' records in test dataset) -> ' + str(
-                #    ratio(y_test, y_pred_prob, 1)))
+        logger.info("test ended")
+        logger.info('ROC AUC:', roc_auc_score(y_test, y_pred))
+        # for i in [x * 0.1 for x in range(1, 6)]:
+        #    i = round(i, 1)
+        #    logger.info('Top' + str(int(i * 100)) + 'percentile = (first ' + str(
+        #        int(i * len(y_test))) + ' records in test dataset) -> ' + str(
+        #        ratio(y_test, y_pred_prob, pct=i)))
 
-                logger.info("test ended")
-                logger.info('ROC AUC:', roc_auc_score(y_test, y_pred))
-                # for i in [x * 0.1 for x in range(1, 6)]:
-                #    i = round(i, 1)
-                #    logger.info('Top' + str(int(i * 100)) + 'percentile = (first ' + str(
-                #        int(i * len(y_test))) + ' records in test dataset) -> ' + str(
-                #        ratio(y_test, y_pred_prob, pct=i)))
+        is_roc_plot_enabled = True
+        if is_roc_plot_enabled:
+            plot_roc(y_test, y_pred)
 
-                is_roc_plot_enabled = True
-                if is_roc_plot_enabled:
-                    plot_roc(y_test, y_pred)
+        if remove_low_pred:
+            y_test, y_pred = discard_low_pred_prob_prediction_couple(y_test, y_pred)
 
-                if remove_low_pred:
-                    y_test, y_pred = discard_low_pred_prob_prediction_couple(y_test, y_pred)
-
-                new_list = [0 if x<0.5 else 1 for x in y_pred]
-                print_false_predicted_entries(X_test, y_pred, y_test, True)
-                print_evaluation_stats(y_test, y_pred, True)
-    except Exception as ex:
-        logger.error(str(ex))
+        new_list = [0 if x<0.5 else 1 for x in y_pred]
+        print_false_predicted_entries(X_test, y_pred, y_test, True)
+        print_evaluation_stats(y_test, y_pred, True)
 
 
 def svc_param_selection(X, y, nfolds):

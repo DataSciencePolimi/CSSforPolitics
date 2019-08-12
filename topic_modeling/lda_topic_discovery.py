@@ -104,3 +104,4 @@ def combine_lda_results_with_lda_output(corpus, lda_model, df, file_out):
 
 if __name__ == "__main__":
     topic_discovery()
+

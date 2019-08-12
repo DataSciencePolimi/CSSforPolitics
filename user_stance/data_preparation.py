@@ -1,8 +1,20 @@
+import sys, os
+sys.path.append("/home/ubuntu/users/emre/CSSforPolitics/")
+
 import util
-from util import globals
+from util import globals, utils
 import logging as logger
-from util import utils
 import pandas as pd
+import numpy as np
+
+import math
+import collections
+import traceback
+import numpy as np
+
+data_path = "/home/ubuntu/users/emre/CSSforPolitics/topic_modeling/data/"
+
+logger.basicConfig(filename='data.log', format="%(asctime)s:%(levelname)s:%(message)s", level=logger.INFO)
 
 
 def is_tweet_eligible_for_new_enrichment(res):
@@ -86,7 +98,78 @@ def get_random_texts(requested_amount, texts):
     return randomly_selected_texts
 
 
-def populate_missing_data_for_stance_transition():
+def populate_missing_data_for_stance_transition(file):
+    try:
+        logger.info("started populating data")
+        cols_list = ['id', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16', '17',
+                     '18', '19', '20', '21', '22', '23', '24', '25', '26', '27', '28', '29', '30', '31', '32', '33']
+        col_list = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16', '17', '18',
+                    '19', '20', '21', '22', '23', '24', '25', '26', '27', '28', '29', '30', '31', '32', '33']
+
+        df = utils.read_file(file, names=cols_list, delimiter=",")
+        df[cols_list] = df[cols_list].fillna(-1)
+        df[cols_list] = df[cols_list].astype(int)
+        df[cols_list] = df[cols_list].astype(str)
+        df[cols_list] = df[cols_list].replace('-1', np.nan)
+
+        #df[cols_list] = df[cols_list].astype(int, errors='ignore')
+        df = df[col_list]
+
+        total_count = df.shape[0]
+        counter = 0
+        print("here")
+        for index, row in df.iterrows():
+            try:
+                if utils.every_col_is_nan(row):
+                    logger.info("dropping row index: " + str(index) + " since all columns are NaN values")
+                    df.drop(index, inplace=True)
+                    continue
+                real_values = {}
+                counter += 1
+                logger.info(str(counter) + " out of " + str(total_count) + " completed.")
+                print(str(counter))
+                for i in range(0, row.size):
+                    temp = row[i]
+                    if (type(temp) == str):
+                        temp = int(temp)
+
+                    if (math.isnan(temp)):
+                        continue
+                    else:
+                        val = (int)(row[i])
+                        real_values[i] = val
+                ordered_real_values = collections.OrderedDict(sorted(real_values.items()))
+                if (counter % 1000 == 0):
+                    logger.info("ordering completed for" + str(counter) + " th row, out of " + str(total_count))
+                for i in range(0, row.size):
+                    col_name=str(i+1)
+                    temp = row[i]
+                    if (type(temp) == str):
+                        temp = int(temp)
+                    if (math.isnan(temp)):
+                        cnt_dict = 0
+                        for key, value in ordered_real_values.items():
+                            cnt_dict += 1
+                            if i < key:
+                                #row[i] = value
+                                df.loc[index,col_name]=str(value)
+                                break
+                            elif (i > key and cnt_dict == len(ordered_real_values)):
+                                #row[i] = value
+                                df.loc[index,col_name]=str(value)
+                                break
+            except Exception as ex:
+                logger.error(str(ex))
+                logger.info(traceback.format_exc())
+
+        df.to_csv(file+"_out.csv", index=False, header=False)
+        logger.info("completed populating data")
+    except Exception as ex:
+        logger.error(str(ex))
+
+
+
+def populate_missing_data_for_stance_transition_s():
     try:
         logger.info("started populating data")
         cols_list = ['id','1','2','3','4','5','6','7','8','9','10','11','12','13','14','15','16','17','18','19','20','21','22','23','24','25','26','27','28','29','30','31','32','33']
@@ -183,38 +266,38 @@ def remove_different_stance_of_same_user_in_same_day(file):
 
 
 def enrich_user_id_train_mlma(file):
+    #df = utils.read_file(file,"~",names=['id','datetime','text','r1'])
+    df = utils.read_file(file,"~",names=['id'],dtype='object')
+    df["user_id"] = pd.Series([])
+    df["datetime"]= pd.Series([])
+    df["text"]= pd.Series([])
+
+    db = utils.get_mongo_client_db()
     try:
-        df = utils.read_file(file,"~",names=['id'], dtype=object)
-        df["user_id"] = pd.Series([])
-        df["datetime"]= pd.Series([])
-        df["text"]= pd.Series([])
-        db = utils.get_mongo_client_db()
-        try:
-            for index, row in df.iterrows():
-                id = row["id"]
-                id = id.rstrip("\r")
-                id = id.rstrip("\n")
-
-                res = db.tweet.find_one({"ID": str(id)})
-                if not res:
-                    logger.info("this tweet is not existing: " + str(id))
-                    continue;
-                if not 'user_id' in res:
-                    logger.info("this tweet does not have user id: " + str(id))
-                    continue;
-                user_id = res["user_id"]
-                datetime = res["datetime"]
-                datetime = datetime[0:10]
-                text = res["tw_full"]
-                df.loc[index, 'user_id'] = user_id
-                df.loc[index, 'datetime'] = datetime
-                df.loc[index, 'text'] = text
-
-        except Exception as ex:
-            logger.error(str(ex))
-        df.to_csv(file+"_userid.csv","~",index=False,line_terminator="\n")
+        counter = 0
+        for index, row in df.iterrows():
+            id = row["id"]
+            id = id.rstrip("\r")
+            res = db.tweet.find_one({"ID": str(id)})
+            if not res:
+                logger.info("this tweet is not existing: " + str(id))
+                continue;
+            if not 'user_id' in res:
+                logger.info("this tweet does not have user id: " + str(id))
+                continue;
+            user_id = res["user_id"]
+            datetime = res["datetime"]
+            text = res["text"]      
+            df.loc[index,'user_id'] = user_id
+            df.loc[index, 'datetime'] = datetime
+            df.loc[index, 'text'] = text
+            counter += 1
     except Exception as ex:
         logger.error(str(ex))
+    logger.info("counter:" + str(counter))
+    df.to_csv(file+"_userid.csv","~",index=False)
+
 
 if __name__ == "__main__":
-    enrich_user_id_train_mlma("F:/tmp/real_neutrals_300k.csv")
+    print("good")
+    populate_missing_data_for_stance_transition(data_path+"merged_stance_of_tweets.csv_monthly_stances_of_users_out_old.csv")

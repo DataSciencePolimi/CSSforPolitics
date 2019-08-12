@@ -1,3 +1,8 @@
+import sys, os
+#sys.path.append("C:/Users/emre2/workspace/CSSforPolitics/TweetAnalyserGit/")
+sys.path.append("/home/ubuntu/users/emre/CSSforPolitics/")
+data_path = "/home/ubuntu/users/emre/CSSforPolitics/topic_modeling/data/"
+
 import traceback
 import random
 import logging as logger
@@ -10,6 +15,8 @@ import numpy as np
 from datetime import datetime
 import json, urllib
 import pandas as pd
+import user_stance.analysis as stance
+#from user_stance import analysis
 
 
 def combine_write(file_write_name, user_id_post_count, user_screennames_bot_scores, user_id_user_screennames):
@@ -44,7 +51,7 @@ def get_bot_screennames_scores(file_bot):
             try:
                 line = line.rstrip("\r\n")
                 fields = line.split(",")
-                screenname = fields[0]
+                screenname = fields[0].lower()
                 score = fields[1]
                 dict_bot_screenname_score[screenname]=score
             except Exception as ex:
@@ -94,3 +101,44 @@ def add_stance_to_last_column_for_bots2(file, filename_write, dict_user_names_id
                 logger.info(ex)
                 logger.info(traceback.format_exc())
         print(str(counter_non_exist))
+
+
+def combine_all_and_export_file(dict_screen_names,dict_bot_scores,dict_user_stance):
+    counter_not_existing_screenname = 0
+    counter_not_existing_userstance = 0
+    counter = 0
+    file_write = open(data_path+"tt.csv", "w", encoding='utf-8')
+
+    for screenname,score in dict_bot_scores.items():
+
+        if not screenname in dict_screen_names.keys():
+            counter_not_existing_screenname += 1
+            continue
+        user_id = dict_screen_names[screenname]
+
+        if not user_id in dict_user_stance.keys():
+            counter_not_existing_userstance += 1
+            continue
+        counter += 1
+        stance = dict_user_stance[user_id]
+        score=score[0:4]
+        file_write.write(screenname+"~"+str(user_id)+"~"+str(score)+"~"+str(stance))
+        file_write.write("\n")
+        if(counter%10000 == 0):
+            file_write.flush()
+
+
+if __name__ == "__main__":
+    logger.basicConfig(level="INFO", filename="bot.log", format="%(asctime)s %(message)s")
+    #dict_screen_names = get_user_names_ids("F:/tmp/Bots/test_screennames.csv")
+    logger.info("started 1")
+    dict_screen_names = get_user_names_ids(data_path+"last_screennames_unique.csv")
+    #dict_bot_scores = get_bot_screennames_scores("F:/tmp/Bots/test_bot_res.csv")
+    logger.info("started 2")
+    dict_bot_scores = get_bot_screennames_scores(data_path+"bot_res.csv")
+    logger.info("started 3")
+    dict_user_stance = stance.pandas_users_stances(data_path+"merged_stance_of_tweets.csv")
+    logger.info("started 4")
+    combine_all_and_export_file(dict_screen_names,dict_bot_scores,dict_user_stance)
+    logger.info("completed all")
+

@@ -11,6 +11,68 @@ import math
 ###########that may be used only once or more##############
 ###########################################################
 
+def check_common_lines_btw_two_files():
+    list1 = []
+    list2 = []
+    with open('/Users/emrecalisir/git/brexit/CSSforPolitics/tweets_stance_remain_0_8.txt') as f:
+        for line in f:
+            list1.append(line.rstrip())
+
+    with open('/Users/emrecalisir/git/brexit/CSSforPolitics/tweets_stance_leave_0_8.txt') as f:
+        for line in f:
+            list2.append(line.rstrip())
+
+    common = list(set(list1).intersection(list2));
+    for com in common:
+        print(com)
+    print("fine")
+
+
+def combine_lda_results_with_lda_output(corpus, lda_model, df, filename_read):
+    ids = []
+    datetimes = []
+    topic_ids = []
+    # topic_words = []
+    counter_index = 0
+
+    for bow in corpus:
+        topics = lda_model.get_document_topics(bow)
+        topic_counter = 0
+        max_prob = 0
+        max_prob_topic = None
+        for topic in topics:
+            prob = topic[1]
+            if max_prob < prob:
+                max_prob = prob
+                max_prob_topic = topic
+            else:
+                break
+
+        topic_ids.append(max_prob_topic[0])
+        tweet_id = df.iloc[counter_index]['ID']
+        datetime = df.iloc[counter_index]['datetime']
+        ids.append(tweet_id)
+        datetimes.append(datetime)
+        counter_index += 1
+
+    if len(ids) != len(topic_ids):
+        logger.error("FATAL ERROR caused by data mismatch: len other cols: " + len(ids) + " len new topic cols:" + len(
+            topic_ids))
+        exit(-1)
+
+    newdf = pd.DataFrame(
+        {
+            'ID': ids,
+            'datetime': datetimes,
+            'topic_id': topic_ids
+        })
+    if (df.shape[0] != newdf.shape[0]):
+        logger.info("FATAL ERROR caused by data mismatch: the number of lines are not matching in input and output data collections")
+    else:
+        newdf.to_csv(filename_read + "_topic_out.csv", index=False)
+        logger.info("saved succesfully into a file")
+
+
 def get_random_int(min, max):
     return rnd.randint(min,max)
 
@@ -151,18 +213,17 @@ def write_text_list_to_file(filename_write, texts):
     logger.info("completed writing")
 
 
-#this method has been removed, same functionality will be done by stopwords extension
-#def remove_unwanted_words_from_df(df):
-#    texts_unwanted_eliminated = []
-#    for text in df['text'].values.tolist():
-#        text = str(text).rstrip("\r")
-#        text = text.lower()
-#        new_text = text.replace("#brexit", "")
-#        new_text = new_text.replace("#eu", "")
-#        new_text = new_text.replace("\\", "")
-#
-#        texts_unwanted_eliminated.append(new_text)
-#    df['text']=pd.Series(texts_unwanted_eliminated)
+def remove_unwanted_words_from_df(df):
+    texts_unwanted_eliminated = []
+    for text in df['text'].values.tolist():
+        text = str(text).rstrip("\r")
+        text = text.lower()
+        new_text = text.replace("#brexit", "")
+        new_text = new_text.replace("#eu", "")
+        new_text = new_text.replace("\\", "")
+
+        texts_unwanted_eliminated.append(new_text)
+    df['text']=pd.Series(texts_unwanted_eliminated)
 
 
 def get_mongo_client_db():
@@ -174,7 +235,7 @@ def get_mongo_client_db():
 def read_file(filename, delimiter=None, names=None, dtype=None, lineterminator='\n'):
     if dtype is None:
         df = pd.read_csv(filename, delimiter=delimiter, encoding="ISO-8859-1", error_bad_lines=False,
-                         names=names, lineterminator=lineterminator, index_col=False)
+                         names=names, index_col=False, engine='python')
     else:
         df = pd.read_csv(filename, delimiter=delimiter, encoding="ISO-8859-1", error_bad_lines=False,
                      names=names,lineterminator=lineterminator, dtype=dtype, index_col=False)
@@ -184,7 +245,10 @@ def read_file(filename, delimiter=None, names=None, dtype=None, lineterminator='
 def every_col_is_nan(row):
     every_col_nan = True
     for i in range(0, row.size):
-        if not math.isnan(row[i]):
+        temp = row[i]
+        if(type(temp)==str):
+            temp = int(temp)
+        if not math.isnan(temp):
             every_col_nan = False
             break
     return every_col_nan
@@ -195,22 +259,27 @@ def read_file_to_dict(file, delimiter=None):
     counter_remain_user = 0
     counter_leave_user = 0
     with open(file, "r", encoding="utf-8", errors='ignore') as ins:
-        for line in ins:
-            try:
-                if line == '\n':
-                    continue;
-                fields = line.split("~")
-                id = fields[0]
-                stance = fields[1].rstrip('\n')
-                dict[id]=stance
-                if stance == '0':
-                    counter_remain_user += 1
-                elif stance == '1':
-                    counter_leave_user += 1
-            except Exception as ex:
-                logger.error(ex)
-                logger.error(line)
-                logger.error(traceback.format_exc())
+        try:
+            linenumber = 0
+            for line in ins:
+                try:
+                    linenumber += 1
+                    if line == '\n':
+                        continue;
+                    fields = line.split("~")
+                    id = fields[0]
+                    stance = fields[1].rstrip('\n')
+                    dict[id]=stance
+                    if stance == '0':
+                        counter_remain_user += 1
+                    elif stance == '1':
+                        counter_leave_user += 1
+                except Exception as ex:
+                    print(ex)
+                    print(line)
+                    print(traceback.format_exc())
+        except Exception as e:
+            print(("Error line %d: %s %s" % (linenumber, str(type(e)), e.message)))
     logger.info("number of users in stance for remain, leave sides are: " + str(counter_remain_user) + "," + str(counter_leave_user))
     return dict
 
@@ -294,7 +363,6 @@ def keywithmaxval(d):
     v = list(d.values())
     k = list(d.keys())
     return k[v.index(max(v))]
-
 
 def find_label_of_tweet(hashtags):
     label = -1
@@ -389,9 +457,8 @@ def drop_nans(df):
     logger.info(df.shape)
     return df
 
-
-def extract_hash_tags(words):
-    ss = [part[1:] for part in words if part.startswith('#')]
+def extract_hash_tags(text):
+    ss = [part[1:] for part in text.split() if part.startswith('#')]
     return ss
 
 

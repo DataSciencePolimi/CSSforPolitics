@@ -1,17 +1,13 @@
 import sys, traceback
 import logging as logger
 import warnings
+sys.path.append("/home/ubuntu/users/emre/CSSforPolitics/")
 from util import ml_utils, text_utils, globals, utils
 import sys, os
-sys.path.append("C:/Users/emre2/workspace/CSSforPolitics/TweetAnalyserGit/")
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
-data_path = "F:/tmp/"
-
-############################################################################################
-#note this is the old method. use the lda_topic_discovery.py for topic discovery operations#
-############################################################################################
+data_path = "/home/ubuntu/users/emre/CSSforPolitics/topic_modeling/data/"
 
 def discover(file):
     try:
@@ -30,7 +26,8 @@ def discover(file):
 
         lda_model = ml_utils.build_lda_model(corpus, id2word, expected_topic_cnt)
 
-        ml_utils.evaluate_lda_results(corpus, id2word, data_words_bigrams, lda_model, expected_topic_cnt, file)
+        texts = df["processed_text"].tolist()
+        ml_utils.evaluate_lda_results(corpus, id2word, texts, lda_model, expected_topic_cnt, file)
         utils.combine_lda_results_with_lda_output(corpus, lda_model, df, file)
 
     except Exception as ex:
@@ -48,4 +45,3 @@ if __name__ == "__main__":
     for i in range (3,4):
         file = data_path + "p" + str(i) + ".csv"
         discover(file)
-

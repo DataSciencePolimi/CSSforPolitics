@@ -1,0 +1,93 @@
+Traceback (most recent call last):
+  File "TopicDiscoverer.py", line 4, in <module>
+    from util import ml_utils, text_utils, globals, utils
+ModuleNotFoundError: No module named 'util'
+Traceback (most recent call last):
+  File "TopicDiscoverer.py", line 46, in <module>
+    discover(file,"~")
+TypeError: discover() takes 1 positional argument but 2 were given
+Traceback (most recent call last):
+  File "TopicDiscoverer.py", line 22, in discover
+    corpus, id2word, data_words_bigrams = text_utils.prepare_lda_input(df)
+  File "/home/ubuntu/users/emre/CSSforPolitics/util/text_utils.py", line 310, in prepare_lda_input
+    df_processed = preprocess_text_for_topic_discovery(df)
+AttributeError: module 'util' has no attribute 'drop_nans'
+Traceback (most recent call last):
+  File "TopicDiscoverer.py", line 5, in <module>
+    from util import ml_utils, text_utils, globals, utils
+  File "/home/ubuntu/users/emre/CSSforPolitics/util/text_utils.py", line 35, in <module>
+    import utils
+ModuleNotFoundError: No module named 'utils'
+Traceback (most recent call last):
+  File "TopicDiscoverer.py", line 5, in <module>
+    from util import ml_utils, text_utils, globals, utils
+  File "/home/ubuntu/users/emre/CSSforPolitics/util/text_utils.py", line 35, in <module>
+    import utils
+ModuleNotFoundError: No module named 'utils'
+/home/ubuntu/utils/anaconda3/lib/python3.6/site-packages/pyLDAvis/_prepare.py:257: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+of pandas will change to not sort by default.
+
+To accept the future behavior, pass 'sort=True'.
+
+To retain the current behavior and silence the warning, pass sort=False
+
+  return pd.concat([default_term_info] + list(topic_dfs))
+/home/ubuntu/utils/anaconda3/lib/python3.6/site-packages/pyLDAvis/_prepare.py:257: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+of pandas will change to not sort by default.
+
+To accept the future behavior, pass 'sort=True'.
+
+To retain the current behavior and silence the warning, pass sort=False
+
+  return pd.concat([default_term_info] + list(topic_dfs))
+/home/ubuntu/utils/anaconda3/lib/python3.6/site-packages/pyLDAvis/_prepare.py:257: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+of pandas will change to not sort by default.
+
+To accept the future behavior, pass 'sort=True'.
+
+To retain the current behavior and silence the warning, pass sort=False
+
+  return pd.concat([default_term_info] + list(topic_dfs))
+Traceback (most recent call last):
+  File "analysis.py", line 10, in <module>
+    from util import text_utils, globals, ml_utils, utils
+  File "/home/ubuntu/users/emre/CSSforPolitics/util/text_utils.py", line 4, in <module>
+    from nltk.corpus import stopwords
+  File "/home/ubuntu/utils/anaconda3/lib/python3.6/site-packages/nltk/__init__.py", line 114, in <module>
+    from nltk.collocations import *
+  File "/home/ubuntu/utils/anaconda3/lib/python3.6/site-packages/nltk/collocations.py", line 39, in <module>
+    from nltk.metrics import ContingencyMeasures, BigramAssocMeasures, TrigramAssocMeasures
+  File "/home/ubuntu/utils/anaconda3/lib/python3.6/site-packages/nltk/metrics/__init__.py", line 16, in <module>
+    from nltk.metrics.scores import          (accuracy, precision, recall, f_measure,
+  File "/home/ubuntu/utils/anaconda3/lib/python3.6/site-packages/nltk/metrics/scores.py", line 18, in <module>
+    from scipy.stats.stats import betai
+  File "/home/ubuntu/utils/anaconda3/lib/python3.6/site-packages/scipy/stats/__init__.py", line 345, in <module>
+    from .stats import *
+  File "/home/ubuntu/utils/anaconda3/lib/python3.6/site-packages/scipy/stats/stats.py", line 171, in <module>
+    from . import distributions
+  File "/home/ubuntu/utils/anaconda3/lib/python3.6/site-packages/scipy/stats/distributions.py", line 10, in <module>
+    from ._distn_infrastructure import (entropy, rv_discrete, rv_continuous,
+  File "/home/ubuntu/utils/anaconda3/lib/python3.6/site-packages/scipy/stats/_distn_infrastructure.py", line 16, in <module>
+    from scipy.misc import doccer
+  File "/home/ubuntu/utils/anaconda3/lib/python3.6/site-packages/scipy/misc/__init__.py", line 68, in <module>
+    from scipy.interpolate._pade import pade as _pade
+  File "/home/ubuntu/utils/anaconda3/lib/python3.6/site-packages/scipy/interpolate/__init__.py", line 175, in <module>
+    from .interpolate import *
+  File "/home/ubuntu/utils/anaconda3/lib/python3.6/site-packages/scipy/interpolate/interpolate.py", line 32, in <module>
+    from .interpnd import _ndim_coords_from_arrays
+  File "interpnd.pyx", line 1, in init scipy.interpolate.interpnd
+  File "/home/ubuntu/utils/anaconda3/lib/python3.6/site-packages/scipy/spatial/__init__.py", line 94, in <module>
+    from .kdtree import *
+  File "/home/ubuntu/utils/anaconda3/lib/python3.6/site-packages/scipy/spatial/kdtree.py", line 8, in <module>
+    import scipy.sparse
+  File "/home/ubuntu/utils/anaconda3/lib/python3.6/site-packages/scipy/sparse/__init__.py", line 241, in <module>
+    from . import csgraph
+  File "/home/ubuntu/utils/anaconda3/lib/python3.6/site-packages/scipy/sparse/csgraph/__init__.py", line 164, in <module>
+    from ._laplacian import laplacian
+  File "<frozen importlib._bootstrap>", line 971, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 955, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 665, in _load_unlocked
+  File "<frozen importlib._bootstrap_external>", line 674, in exec_module
+  File "<frozen importlib._bootstrap_external>", line 764, in get_code
+  File "<frozen importlib._bootstrap_external>", line 833, in get_data
+KeyboardInterrupt
