@@ -1,11 +1,12 @@
+import sys, os
+sys.path.append("/home/ubuntu/users/emre/CSSforPolitics/")
+data_path = "/home/ubuntu/users/emre/CSSforPolitics/user_stance/"
+
 import logging as logger
 from util import text_utils, globals, ml_utils, utils
 
-import sys, os
-#sys.path.append("/home/ubuntu/users/emre/CSSforPolitics/")
 
-logger.basicConfig(filename=globals.WINDOWS_LOG_PATH + 'rule.log', format="%(asctime)s:%(levelname)s:%(message)s", level=logger.INFO)
-
+logger.basicConfig(filename=data_path + 'rule.log', format="%(asctime)s:%(levelname)s:%(message)s", level=logger.INFO)
 
 def create_ml_r1_file_read_line():
     #calculate_r1()
@@ -36,8 +37,6 @@ def create_ml_r1_file_read_line():
                     continue
 
                 id = splits[0]
-                if id == "940361425729486848":
-                    print("hop")
                 user_id = splits[1]
                 datetime = splits[2]
                 #datetime = datetime[0:10]
@@ -47,7 +46,7 @@ def create_ml_r1_file_read_line():
                 words = [word.replace(".","") for word in words]
                 words = [word.replace(",","") for word in words]
                 words = text_utils.to_lowercase(words)
-                hashtags = [part[1:] for part in words if part.startswith('#')]
+                hashtags = [part[1:] for part in words if part.startswith('#')]                
 
                 #hashtags = splits[4]
 
@@ -64,11 +63,11 @@ def create_ml_r1_file_read_line():
                         counter_neutral += 1
 
                 counter += 1
-                new_line = id + "~" + user_id + "~" + datetime + "pun~" + text + "~" + str(r1) + "\n"
+                new_line = id + "~" + user_id + "~" + datetime + "~" + text + "~" + str(r1) + "\n"
                 f_write.write(new_line)
                 if r1 == 0 or r1 == 1:
                     f_write_polarized.write(new_line)
-                elif(r1 == -1):
+                elif r1 == -1:
                     f_write_neutrals.write(new_line)
                 if (counter % 10000 == 0):
                     logger.info(str(datetime) + ". counter total, neutral, remain, leave: " + str(counter)+","+str(counter_neutral) + "," + str(counter_remain) + "," + str(counter_leave))

@@ -1,3 +1,6 @@
+import sys, os
+sys.path.append("/home/ubuntu/users/emre/CSSforPolitics/")
+
 import traceback
 from util import globals
 from pymongo import MongoClient
@@ -26,17 +29,8 @@ def get_followers_of_user(screen_name, api):
     return ids
 
 
-def enrich_mongo_with_followers_info():
+def enrich_mongo_with_followers_info(consumer_key,consumer_secret,access_token,access_token_secret,log_path,month_start,month_end,day_start,day_end):
     # this method is used to add the follower information as an additional attribute to the existing MongoDB record.
-    consumer_key = sys.argv[1]
-    consumer_secret = sys.argv[2]
-    access_token = sys.argv[3]
-    access_token_secret = sys.argv[4]
-    log_path = sys.argv[5]
-    month_start = int(sys.argv[6])
-    month_end = int(sys.argv[7])
-    day_start = int(sys.argv[8])
-    day_end = int(sys.argv[9])
 
     logger.basicConfig(level="INFO", filename=log_path, format="%(asctime)s %(message)s")
     logger.info("started to tweepy enrichment operations on MongoDB")
@@ -86,7 +80,8 @@ def enrich_mongo_with_followers_info():
                                         continue;
                                     existing_user = False
 
-                                    for user_mongo in db.user.find({"user_id": res["user_id"]}):
+
+                                    for user_mongo in db.user.find({"$and":[{"user_id":res["user_id"]},{"f_cnt":{"$exists":True}}]}):
                                         counter_already_enriched += 1
                                         logger.info(user_mongo[
                                                         "user_id"] + " already enriched. total counter already enriched: " + str(
@@ -142,4 +137,14 @@ def extract_followers_from_mongo():
 
 
 if __name__ == "__main__":
-    extract_followers_from_mongo()
+    consumer_key = sys.argv[1]
+    consumer_secret = sys.argv[2]
+    access_token = sys.argv[3]
+    access_token_secret = sys.argv[4]
+    log_path = sys.argv[5]
+    month_start = int(sys.argv[6])
+    month_end = int(sys.argv[7])
+    day_start = int(sys.argv[8])
+    day_end = int(sys.argv[9])
+    enrich_mongo_with_followers_info(consumer_key,consumer_secret,access_token,access_token_secret,log_path,month_start,month_end,day_start,day_end)
+	

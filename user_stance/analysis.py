@@ -1,3 +1,9 @@
+# Bring your packages onto the path
+import sys, os
+#sys.path.append(os.path.abspath(os.path.join('..', 'util')))
+sys.path.append("/home/ubuntu/users/emre/CSSforPolitics/")
+
+
 import traceback
 import logging as logger
 from util import text_utils, globals, ml_utils, utils
@@ -5,9 +11,19 @@ import collections
 from datetime import datetime
 import pandas as pd
 
+data_path = "/home/ubuntu/users/emre/CSSforPolitics/topic_modeling/data/"
 
 
-def r1_stats():
+def r1_stats(file):
+    df = utils.read_file(file, "~", names=['ID', 'user_id', 'datetime', 'text', 'r1'])
+    logger.info("started")
+    try:
+        logger.info(df['r1'].value_counts())
+    except Exception as e:
+        logger.error(str(e))
+
+
+def r1_daily_stats():
     df = utils.read_file("F:/tmp/full_features.csvl_out.csv", "~", names=['ID', 'user_id', 'datetime', 'text', 'r1'])
     logger.info("started")
     try:
@@ -22,6 +38,7 @@ def r1_stats():
 def extract_stance_changes_of_users_before_after_ref(file):
     #note: input file contains the prediction results of tweets on the last column
     try:
+        logger.info("started")
         df = utils.read_file(file,"~", globals.STANCE_FILE_COLUMNS)
         dict_users_before_ref = {}
         dict_users_after_ref = {}
@@ -469,6 +486,8 @@ def pandas_users_stances(file):
                 dict[str(user_id)] = user_stance
 
         logger.info("number of users: [remain, leave]: " + str(counter_remain_users)+","+str(counter_leave_users))
+        utils.write_dict_to_file(file+"_users.csv", dict)
+
         return dict
 
     except Exception as ex:
@@ -480,19 +499,27 @@ def main():
     if (globals.os == "windows"):
         log_path = "F:/tmp/custom.log"
     else:
-        log_path = "custom.log"
+        log_path = "predictor.log"
     logger.basicConfig(level="INFO", filename=log_path, format="%(asctime)s %(message)s")
 
     try:
         print("ok")
-        extract_stance_changes_of_users_before_after_ref("F:/tmp/test.txt")
+        #extract_stance_changes_of_users_before_after_ref("full_en_30_10_2018.csv_neutrals_out.csv_out.csv_sentiment.csv")
+        #extract_stance_changes_of_users_before_after_ref("test")
+        #file = data_path + "merged_stance_of_tweets.csv"
+        #r1_stats(file)
+        file = data_path + "merged_stance_of_tweets.csv"
+        #file = data_path + "test"
+        users_stances = pandas_users_stances(file)
+        unique_days = extract_daily_involvement_of_prev_calculated_user_stances(file, users_stances)
+        utils.write_dict_to_file(file+"_daily_out.csv", unique_days)
 
     except Exception as ex:
         logger.info(ex)
         logger.info(traceback.format_exc())
 
-    if __name__ == "__main__":
-        main()
+if __name__ == "__main__":
+    main()
 
 
 def group_users_by_posts(file):

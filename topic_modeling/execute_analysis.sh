@@ -1,0 +1,1 @@
+nohup python analysis.py &
