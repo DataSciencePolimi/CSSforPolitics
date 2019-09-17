@@ -2,7 +2,7 @@ import sys, os
 sys.path.append("/home/ubuntu/users/emre/CSSforPolitics/")
 
 import pandas as pd
-from util import ml_utils, text_utils, globals, utils
+from util_tools import ml_utils, text_utils, globals, utils
 import traceback
 import numpy as np
 import pickle
@@ -19,6 +19,17 @@ class Classifier:
     def __init__(self, clf, pipeline):
         self.clf = clf
         self.pipeline = pipeline
+        self.model_remain = ml_utils.restore_model(globals.CLASSIFIER_REMAIN)
+        self.model_leave = ml_utils.restore_model(globals.CLASSIFIER_LEAVE)
+
+    def predict_with_remain_classifier(self, processed_text):
+        remain_confidence = self.model_remain.predict_proba([processed_text])[:, 1]
+        return remain_confidence[0]
+
+    def predict_with_leave_classifier(self, processed_text):
+        leave_confidence = self.model_leave.predict_proba([processed_text])[:, 1]
+        return leave_confidence[0]
+
 
     def build_model(self):
         try:
@@ -115,87 +126,33 @@ class Classifier:
 
             elif globals.RUN_MODE == "PREDICT_UNLABELED_DATA":
                 try:
-                    df_pred = utils.read_file(globals.INPUT_FILE_PRED, "~", globals.PRED_FILE_COLUMNS,lineterminator='\r')
+                    df_pred = utils.read_file(globals.INPUT_FILE_PRED, "~", globals.PRED_NEW_COLS,lineterminator='\r')
+
+                    df_pred['text_filled'] = np.where(pd.isna(df_pred.tw_full), df_pred.text, df_pred.tw_full)
+
+                    df_pred = df_pred.drop('text', axis=1)
+                    df_pred = df_pred.drop('tw_full', axis=1)
+
+                    df_pred['processed_text'] = df_pred['text_filled'].apply(text_utils.apply_preprocessing_to_tweet)
+
+                    print(df_pred.shape)
+                    print(df_pred.head())
+                    logger.info(df_pred.head())
+
+                    df_pred['remain_confidence'] = df_pred[globals.PROCESSED_TEXT_COLUMN].apply(self.predict_with_remain_classifier)
+                    df_pred['leave_confidence'] = df_pred[globals.PROCESSED_TEXT_COLUMN].apply(self.predict_with_leave_classifier)
+
+                    df_pred['stance'] = np.where(((df_pred['remain_confidence']>0.7) & (df_pred["leave_confidence"]<0.7)), "remain", np.where(((df_pred['leave_confidence']>0.7) & (df_pred["remain_confidence"]<0.7)), "leave", "other"))
+
+                    print("total file: " + str(df_pred.shape))
+                    logger.info("total file: " + str(df_pred.shape))
+                    df_pred.to_csv(globals.INPUT_FILE_PRED + "_pred_sep9.csv", sep="~", index=False, encoding="ISO-8859-1" )
+
+                    logger.info("complete.")
+
                 except Exception as ex:
                     logger.error(ex)
-                print(df_pred.shape)
-                print(df_pred.head())
-                model_remain = ml_utils.restore_model(globals.CLASSIFIER_REMAIN)
-                model_leave = ml_utils.restore_model(globals.CLASSIFIER_LEAVE)
 
-                logger.info(df_pred.head())
-                # pre-processing operations
-
-                text_utils.preprocess_text_in_column(df_pred, "tw_full")
-
-                df_pred = ml_utils.predict_with_multiple_classifiers(self.pipeline, df_pred, model_remain, model_leave)
-                print("total file: " + str(df_pred.shape))
-
-                df_pred_remains = df_pred[(df_pred["y_preds_remain"]>0.7) & (df_pred["y_preds_leave"]<0.7)]
-                df_pred_remains["stance_res"] = "remain"
-                print("total file remains: " + str(df_pred_remains.shape))
-
-                condition_res = (df_pred["y_preds_remain"]>0.7) & (df_pred["y_preds_leave"]<0.7)
-                condition_res_inverted = np.invert(condition_res)
-
-                df_pred_remains_others = df_pred[condition_res_inverted]
-                df_pred_remains_others["stance_res"] = "others"
-                print("total file remains others: " + str(df_pred_remains_others.shape))
-
-                df_pred_leaves = df_pred[(df_pred["y_preds_leave"]>0.7) & (df_pred["y_preds_remain"]<0.7)]
-                df_pred_leaves["stance_res"] = "leave"
-                print("total file leaves: " + str(df_pred_leaves.shape))
-
-                condition_res = (df_pred["y_preds_leave"]>0.7) & (df_pred["y_preds_remain"]<0.7)
-                condition_res_inverted = np.invert(condition_res)
-
-                df_pred_leaves_others = df_pred[condition_res_inverted]
-                df_pred_leaves_others["stance_res"] = "others"
-                print("total file leaves others: " + str(df_pred_leaves_others.shape))
-
-                df_incl_others = pd.merge(df_pred_remains_others, df_pred_leaves_others, how='inner')
-                print(df_incl_others.shape)
-                print("total file all others shape: " + str(df_incl_others.shape))
-
-                df_all_others = df_incl_others.drop_duplicates()
-                print(df_all_others.shape)
-
-                df_all_preds = pd.concat([df_pred_remains, df_pred_leaves, df_all_others])
-                print(df_all_preds.shape)
-
-
-                df_all_preds.to_csv(globals.INPUT_FILE_PRED + "_pred_aug11.csv", sep="~", index=False, encoding="ISO-8859-1" )
-
-                #if self.pipeline is None:
-                #    with open(globals.FILE_STORE_MODEL, 'rb') as file:
-                #        self.pipeline = pickle.load(file)
-
-                #df_discover = utils.read_file(globals.INPUT_FILE_NAME_DISCOVER_PREDICT_NEUTRALS, "~", names=globals.DISCOVER_FILE_COLUMNS)
-                #utils.drop_nans(df_discover['text'])
-                #text_utils.preprocess_text(df_discover)
-#
-                #processed = df_discover[globals.PROCESSED_TEXT_COLUMN]
-                #fixed_processed = processed[pd.notnull(processed)]
-                #X = fixed_processed.values
-#
-                #prabas_ = self.pipeline.predict_proba(X)
-                #y_pred = prabas_[:, 1]
-                #df_discover["pred_p1_prob"] = pd.Series(y_pred)
-                ## discard gray area, the records having less probability of being truly predicted
-                #logger.info(str(df_discover.shape))
-                #if globals.ELIMINATE_LOW_PROB:
-                #    df_discover = df_discover[(df_discover.pred_p1_prob > globals.MAX_PROB) | (df_discover.pred_p1_prob < globals.MIN_PROB)]
-                #    logger.info("after discarding less accurate results:" + str(df_discover.shape))
-#
-                ## convert from float to integer
-                #df_discover['pred'] = np.where(df_discover['pred_p1_prob'] > 0.5, 1, 0)
-                #logger.info(df_discover['pred'].value_counts())
-#
-                ## write to file
-                #df_discover.to_csv(globals.INPUT_FILE_NAME_DISCOVER_PREDICT_NEUTRALS + "_out.csv", sep="~",
-                #                   columns=['ID', 'user_id', 'datetime', 'text', 'pred'], index=False)
-#
-                logger.info("complete.")
 
         except Exception as ex:
             logger.error(ex)
