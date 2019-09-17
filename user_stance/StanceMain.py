@@ -1,11 +1,10 @@
 import sys, os
-sys.path.append("/home/ubuntu/users/emre/CSSforPolitics/")
 
 from user_stance.StanceClassifier import Classifier
 
 import logging as logger
 import traceback
-from util import ml_utils, globals, utils
+from util_tools import ml_utils, globals, utils
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.feature_extraction.text import TfidfTransformer
 
